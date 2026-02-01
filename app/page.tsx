@@ -135,7 +135,7 @@ export default function SalesProposalPage() {
             disabled={loading}
             className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? '生成中...（docs の資料を読み込み中）' : '提案文を生成'}
+            {loading ? '生成中...' : '提案文を生成'}
           </button>
 
           {error && (
