@@ -17,8 +17,11 @@ export default function SalesProposalPage() {
     setGeneratedText('')
     setCopied(false)
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90000)
+
     try {
-      const res = await fetch('/api/generate-proposal', {
+      const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -26,14 +29,18 @@ export default function SalesProposalPage() {
           productName,
           issue,
         }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       const contentType = res.headers.get('content-type') ?? ''
       const text = await res.text()
 
       if (!contentType.includes('application/json')) {
-        // API が HTML（エラーページ）を返した場合
-        const msg = text.startsWith('<!') ? 'サーバーでエラーが発生しました。開発サーバーを再起動してください。' : text.slice(0, 200)
+        const msg = text.startsWith('<!')
+          ? 'サーバーでエラーが発生しました。しばらくしてから再試行するか、Vercel のログを確認してください。'
+          : text.slice(0, 300)
         throw new Error(msg)
       }
 
@@ -45,7 +52,17 @@ export default function SalesProposalPage() {
 
       setGeneratedText(data.proposal || '')
     } catch (err) {
-      setError(err instanceof Error ? err.message : '予期しないエラーが発生しました')
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('タイムアウトしました。時間をおいて再度お試しください。')
+        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          setError('ネットワークエラーです。接続を確認して再度お試しください。')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('予期しないエラーが発生しました')
+      }
     } finally {
       setLoading(false)
     }

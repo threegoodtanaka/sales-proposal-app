@@ -4,6 +4,10 @@ import path from 'node:path'
 import { PDFParse } from 'pdf-parse'
 import OpenAI from 'openai'
 
+// Vercel サーバーレスでは Node.js ランタイムを明示（pdf-parse 用）
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function POST(request: NextRequest) {
   try {
     const { companyName, productName, issue } = await request.json()
@@ -14,13 +18,14 @@ export async function POST(request: NextRequest) {
     const apiKey = process.env.OPENAI_API_KEY
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OPENAI_API_KEY が設定されていません。.env ファイルを確認してください。' },
+        { error: 'APIキーが設定されていません。Vercel の Environment Variables で OPENAI_API_KEY を設定し、Redeploy してください。' },
         { status: 500 }
       )
     }
 
-    // docs フォルダ内の PDF を読み込み
-    const docsDir = path.join(process.cwd(), 'docs')
+    // Vercel サーバーレス環境: デプロイルートからの相対パスで docs を指定
+    const projectRoot = process.cwd()
+    const docsDir = path.resolve(projectRoot, 'docs')
     let documentText = ''
 
     try {
@@ -28,6 +33,7 @@ export async function POST(request: NextRequest) {
       const pdfFiles = files.filter((f) => f.toLowerCase().endsWith('.pdf'))
 
       for (const pdfFile of pdfFiles) {
+        // path.join で OS に依存しないパスを生成（Vercel は Linux）
         const pdfPath = path.join(docsDir, pdfFile)
         const buffer = await readFile(pdfPath)
         const parser = new PDFParse({ data: buffer })
@@ -42,12 +48,16 @@ export async function POST(request: NextRequest) {
       if (!documentText.trim()) {
         documentText = '（参考資料がありませんでした）'
       }
-    } catch (err) {
-      console.error('PDF読み込みエラー:', err)
-      documentText = '（参考資料の読み込みに失敗しました）'
+    } catch (pdfErr) {
+      const errMsg = pdfErr instanceof Error ? pdfErr.message : String(pdfErr)
+      // ENOENT 等は参考資料なしとして続行（本番では docs が含まれている想定）
+      if (errMsg.includes('ENOENT') || errMsg.includes('no such file')) {
+        documentText = '（参考資料のフォルダが見つかりませんでした）'
+      } else {
+        documentText = `（参考資料の読み込みに失敗しました: ${errMsg.slice(0, 100)}）`
+      }
     }
 
-    // トークン制限のため、長すぎる場合は先頭部分を使用（目安: 約10000文字）
     const maxChars = 10000
     const truncatedText =
       documentText.length > maxChars
@@ -88,11 +98,15 @@ ${truncatedText}
 
     return NextResponse.json({ proposal: proposalText })
   } catch (error) {
-    console.error('APIエラー:', error)
     const message =
       error instanceof Error ? error.message : '不明なエラーが発生しました'
     return NextResponse.json(
-      { error: `提案文の生成に失敗しました: ${message}` },
+      {
+        error:
+          message.includes('APIキー') || message.includes('OPENAI')
+            ? message
+            : `提案文の生成に失敗しました: ${message}`,
+      },
       { status: 500 }
     )
   }
