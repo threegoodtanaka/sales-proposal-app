@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>チャットボット</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            background: #f7f7f8;
+            color: #0d0d0d;
+        }
+
+        /* サイドバー（ChatGPT風） */
+        .sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: #171717;
+            color: #ececec;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .new-chat-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 14px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: #ececec;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .new-chat-btn:hover {
+            background: rgba(255,255,255,0.08);
+        }
+        .new-chat-btn svg {
+            flex-shrink: 0;
+            opacity: 0.9;
+        }
+        .sidebar-title {
+            padding: 12px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+        }
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 12px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .sidebar-footer details {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+        }
+        .sidebar-footer summary {
+            cursor: pointer;
+            padding: 6px 0;
+        }
+        .sidebar-footer .preview {
+            font-size: 11px;
+            max-height: 80px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 6px;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+        }
+        .sidebar-footer textarea {
+            width: 100%;
+            min-height: 50px;
+            margin-top: 6px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.06);
+            color: #ececec;
+            font-size: 12px;
+            resize: vertical;
+        }
+        .sidebar-footer textarea::placeholder {
+            color: rgba(255,255,255,0.4);
+        }
+        .sidebar-footer select {
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            color: #ececec;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .sidebar-footer select:focus {
+            outline: none;
+            border-color: rgba(255,255,255,0.4);
+        }
+        .sidebar-footer label.select-label {
+            display: block;
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 4px;
+        }
+        #usage-summary {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+            padding: 10px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 10px;
+        }
+        #usage-summary .usage-row { margin: 4px 0; }
+        #usage-summary .usage-total { font-weight: 600; margin-top: 6px; }
+
+        /* メインエリア */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            background: #f7f7f8;
+        }
+        .chat-header {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #0d0d0d;
+            border-bottom: 1px solid #e5e5e5;
+            background: #fff;
+        }
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .message-wrap {
+            width: 100%;
+            max-width: 768px;
+            margin-bottom: 24px;
+        }
+        .message {
+            display: flex;
+            gap: 16px;
+            padding: 20px 0;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .message:last-child { border-bottom: none; }
+        .message.user {
+            background: #f7f7f8;
+            margin: 0 -24px;
+            padding: 20px 24px;
+        }
+        .message-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .message.user .message-avatar {
+            background: #19c37d;
+            color: #fff;
+        }
+        .message.assistant .message-avatar {
+            background: #5436da;
+            color: #fff;
+        }
+        .message-body {
+            flex: 1;
+            min-width: 0;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message .role {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #0d0d0d;
+        }
+        .message.error .message-body { color: #c53030; }
+        .message-usage {
+            font-size: 11px;
+            color: #8e8ea0;
+            margin-top: 6px;
+        }
+
+        /* 入力エリア（ChatGPT風） */
+        .input-area {
+            padding: 16px 24px 24px;
+            background: #f7f7f8;
+        }
+        .input-wrap {
+            max-width: 768px;
+            margin: 0 auto;
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #fff;
+            border: 1px solid #d9d9e3;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        .input-wrap:focus-within {
+            border-color: #19c37d;
+            box-shadow: 0 0 0 2px rgba(25,195,125,0.15);
+        }
+        #message-input {
+            flex: 1;
+            padding: 12px 0;
+            border: none;
+            background: transparent;
+            color: #0d0d0d;
+            font-size: 16px;
+            line-height: 1.5;
+            resize: none;
+            min-height: 24px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #message-input::placeholder {
+            color: #8e8ea0;
+        }
+        #message-input:focus {
+            outline: none;
+        }
+        #send-btn {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            background: #19c37d;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.15s, opacity 0.15s;
+        }
+        #send-btn:hover:not(:disabled) {
+            background: #16a86a;
+        }
+        #send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+            color: #8e8ea0;
+        }
+        .empty-state h2 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #0d0d0d;
+            margin: 0 0 12px;
+        }
+        .empty-state p {
+            font-size: 15px;
+            margin: 0 0 24px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 0;
+                min-width: 0;
+                overflow: hidden;
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                z-index: 100;
+                transition: width 0.2s;
+            }
+            .sidebar.open {
+                width: 260px;
+            }
+            .main { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button type="button" class="new-chat-btn" id="new-chat-btn" title="新しいチャット">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                新しいチャット
+            </button>
+        </div>
+        <div class="sidebar-title">チャットボット</div>
+        <div class="sidebar-footer">
+            <label class="select-label">用途（プロンプト）</label>
+            <select id="preset-select" title="用途に合わせた指示をAIに渡します">
+                <option value="default">標準</option>
+            </select>
+            <label class="select-label">モデル</label>
+            <select id="model-select" title="使用するLLMモデル">
+                <optgroup label="Google Gemini">
+                    <option value="gemini-3-pro-preview">Gemini 3 Pro</option>
+                    <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                </optgroup>
+                <optgroup label="OpenAI">
+                    <option value="gpt-5.2">GPT-5.2</option>
+                    <option value="gpt-5.2-pro">GPT-5.2 pro</option>
+                    <option value="gpt-5.1">GPT-5.1</option>
+                    <option value="gpt-5">GPT-5</option>
+                    <option value="gpt-5-mini">GPT-5 mini</option>
+                    <option value="gpt-5-nano">GPT-5 nano</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4-turbo">gpt-4-turbo</option>
+                    <option value="gpt-4">gpt-4</option>
+                    <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                </optgroup>
+            </select>
+            <div id="usage-summary">
+                <div class="select-label">利用量（この会話）</div>
+                <div class="usage-row">入力: <span id="usage-input">0</span> トークン</div>
+                <div class="usage-row">出力: <span id="usage-output">0</span> トークン</div>
+                <div class="usage-row usage-total">合計: <span id="usage-total">0</span> トークン</div>
+            </div>
+            <details>
+                <summary>コンテキスト・追加情報</summary>
+                <div id="context-files" class="preview">読み込み中…</div>
+                <label style="display:block; margin-top:8px; font-size:11px;">この会話だけで追加するテキスト（任意）:</label>
+                <textarea id="extra-context" placeholder="議事録やXのやり取りなどを貼り付け"></textarea>
+            </details>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="chat-header">チャット</header>
+        <div id="chat-container">
+            <div class="empty-state" id="empty-state">
+                <h2>何でも聞いてください</h2>
+                <p>メッセージを入力して送信すると、コンテキストを踏まえて回答します。</p>
+            </div>
+        </div>
+        <div class="input-area">
+            <div class="input-wrap">
+                <textarea id="message-input" placeholder="メッセージを入力...（Shift+Enterで改行）" autocomplete="off" rows="1"></textarea>
+                <button type="button" id="send-btn" title="送信">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const chatContainer = document.getElementById("chat-container");
+        const emptyState = document.getElementById("empty-state");
+        const messageInput = document.getElementById("message-input");
+        const sendBtn = document.getElementById("send-btn");
+        const newChatBtn = document.getElementById("new-chat-btn");
+        const presetSelect = document.getElementById("preset-select");
+        const modelSelect = document.getElementById("model-select");
+        const contextFilesEl = document.getElementById("context-files");
+        const extraContextEl = document.getElementById("extra-context");
+
+        let history = [];
+        let sessionUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+
+        function formatNum(n) { return Number(n).toLocaleString(); }
+        function updateUsageSummary() {
+            const el = document.getElementById("usage-input");
+            const el2 = document.getElementById("usage-output");
+            const el3 = document.getElementById("usage-total");
+            if (el) el.textContent = formatNum(sessionUsage.input_tokens);
+            if (el2) el2.textContent = formatNum(sessionUsage.output_tokens);
+            if (el3) el3.textContent = formatNum(sessionUsage.total_tokens);
+        }
+
+        function startNewChat() {
+            history = [];
+            sessionUsage = { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+            updateUsageSummary();
+            chatContainer.innerHTML = '';
+            const empty = document.createElement("div");
+            empty.className = "empty-state";
+            empty.id = "empty-state";
+            empty.innerHTML = '<h2>何でも聞いてください</h2><p>メッセージを入力して送信すると、コンテキストを踏まえて回答します。</p>';
+            chatContainer.appendChild(empty);
+        }
+
+        newChatBtn.addEventListener("click", startNewChat);
+
+        async function loadPresets() {
+            try {
+                const res = await fetch("/api/presets");
+                const data = await res.json();
+                if (!presetSelect || !data.presets || !data.presets.length) return;
+                presetSelect.innerHTML = "";
+                data.presets.forEach(function (p) {
+                    const opt = document.createElement("option");
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    presetSelect.appendChild(opt);
+                });
+            } catch (e) {}
+        }
+        loadPresets();
+
+        async function loadContext() {
+            try {
+                const res = await fetch("/api/context");
+                const data = await res.json();
+                if (modelSelect && data.model) {
+                    const opt = modelSelect.querySelector('option[value="' + data.model + '"]');
+                    if (opt) modelSelect.value = data.model;
+                }
+                if (data.files && data.files.length > 0) {
+                    contextFilesEl.textContent = "読み込み済み: " + data.files.join(", ");
+                } else {
+                    contextFilesEl.textContent = "context フォルダの .txt / .md / .pdf / .docx / .pptx が参照されます";
+                }
+            } catch (e) {
+                contextFilesEl.textContent = "コンテキストの取得に失敗しました";
+            }
+        }
+        loadContext();
+
+        function addMessage(role, content, isError, usage) {
+            if (typeof isError === "undefined") isError = false;
+            if (emptyState && emptyState.parentNode) {
+                emptyState.remove();
+            }
+            const wrap = document.createElement("div");
+            wrap.className = "message-wrap";
+            const roleLabel = role === "user" ? "あなた" : "アシスタント";
+            const avatar = role === "user" ? "U" : "A";
+            let usageHtml = "";
+            if (usage && role === "assistant" && (usage.input_tokens > 0 || usage.output_tokens > 0)) {
+                usageHtml = '<div class="message-usage">入力 ' + formatNum(usage.input_tokens) + ' / 出力 ' + formatNum(usage.output_tokens) + ' トークン</div>';
+            }
+            wrap.innerHTML =
+                '<div class="message ' + role + (isError ? " error" : "") + '">' +
+                '<div class="message-avatar">' + escapeHtml(avatar) + '</div>' +
+                '<div class="message-body">' +
+                '<div class="role">' + escapeHtml(roleLabel) + '</div>' +
+                '<div class="content">' + escapeHtml(content) + '</div>' +
+                usageHtml +
+                '</div></div>';
+            chatContainer.appendChild(wrap);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            messageInput.value = "";
+            addMessage("user", text);
+            history.push({ user: text, assistant: "" });
+
+            sendBtn.disabled = true;
+
+            try {
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        message: text,
+                        history: history.slice(0, -1),
+                        extra_context: extraContextEl ? extraContextEl.value : "",
+                        model: modelSelect ? modelSelect.value : "",
+                        preset_id: presetSelect ? presetSelect.value : "default"
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    addMessage("assistant", "エラー: " + (data.error || res.status), true);
+                    history.pop();
+                    return;
+                }
+
+                const reply = data.reply || "";
+                const usage = data.usage || {};
+                addMessage("assistant", reply, false, usage);
+                history[history.length - 1].assistant = reply;
+                if (usage.input_tokens != null || usage.output_tokens != null) {
+                    sessionUsage.input_tokens += usage.input_tokens || 0;
+                    sessionUsage.output_tokens += usage.output_tokens || 0;
+                    sessionUsage.total_tokens += usage.total_tokens || ( (usage.input_tokens || 0) + (usage.output_tokens || 0) );
+                    updateUsageSummary();
+                }
+            } catch (err) {
+                addMessage("assistant", "エラー: " + err.message, true);
+                history.pop();
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        sendBtn.addEventListener("click", sendMessage);
+        messageInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

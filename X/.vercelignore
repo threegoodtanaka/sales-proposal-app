@@ -1,0 +1,9 @@
+# デプロイに不要なものを除く（任意）
+__pycache__
+*.pyc
+.venv
+.env
+.env.*
+*.log
+run_public.ps1
+EXTERNAL.md
