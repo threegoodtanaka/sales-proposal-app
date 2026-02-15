@@ -124,6 +124,65 @@
         }
         #usage-summary .usage-row { margin: 4px 0; }
         #usage-summary .usage-total { font-weight: 600; margin-top: 6px; }
+        #preset-prompt-edit {
+            width: 100%;
+            min-height: 80px;
+            max-height: 160px;
+            margin-top: 6px;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.25);
+            color: rgba(255,255,255,0.9);
+            font-size: 12px;
+            line-height: 1.4;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        #preset-prompt-edit::placeholder { color: rgba(255,255,255,0.4); }
+        #preset-prompt-edit:focus { outline: none; border-color: rgba(255,255,255,0.4); }
+        .preset-save-wrap { margin-top: 6px; }
+        #preset-save-btn {
+            padding: 4px 10px;
+            font-size: 11px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+        }
+        #preset-save-btn:hover { background: rgba(255,255,255,0.18); }
+        #preset-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .scrape-url, .scrape-instruction {
+            width: 100%;
+            margin-top: 4px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            color: #ececec;
+            font-size: 12px;
+            box-sizing: border-box;
+        }
+        .scrape-instruction { min-height: 50px; resize: vertical; }
+        #scrape-run-btn {
+            margin-top: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(25,195,125,0.3);
+            color: #ececec;
+            cursor: pointer;
+        }
+        #scrape-run-btn:hover:not(:disabled) { background: rgba(25,195,125,0.5); }
+        #scrape-run-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        #scrape-result { margin-top: 8px; font-size: 11px; white-space: pre-wrap; max-height: 120px; overflow: auto; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 6px; }
+        #scrape-download-btn { margin-top: 6px; padding: 4px 10px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.1); color: #ececec; cursor: pointer; }
+        #scrape-download-btn:hover { background: rgba(255,255,255,0.18); }
+        #scrape-download-btn[hidden] { display: none; }
+        #scrape-details input[type="number"] { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #ececec; border-radius: 4px; }
+        #scrape-details input[type="checkbox"] { margin-right: 4px; }
 
         /* メインエリア */
         .main {
@@ -324,6 +383,10 @@
             <select id="preset-select" title="用途に合わせた指示をAIに渡します">
                 <option value="default">標準</option>
             </select>
+            <textarea id="preset-prompt-edit" placeholder="プロンプトを編集（この内容がAIに渡されます）" title="選択した用途のプロンプトを編集"></textarea>
+            <div class="preset-save-wrap">
+                <button type="button" id="preset-save-btn" title="この用途に上書き保存">プリセットに保存</button>
+            </div>
             <label class="select-label">モデル</label>
             <select id="model-select" title="使用するLLMモデル">
                 <optgroup label="Google Gemini">
@@ -354,6 +417,21 @@
                 <div class="usage-row">出力: <span id="usage-output">0</span> トークン</div>
                 <div class="usage-row usage-total">合計: <span id="usage-total">0</span> トークン</div>
             </div>
+            <details id="scrape-details">
+                <summary>スクレイピング（URL → CSV）</summary>
+                <label class="select-label">URL</label>
+                <input type="url" id="scrape-url" class="scrape-url" placeholder="https://...（一覧ページ）" autocomplete="off">
+                <label class="select-label" style="margin-top:6px;">指示（何を取得するか）</label>
+                <button type="button" id="scrape-tabelog-btn" style="margin-left:4px; padding:2px 8px; font-size:11px; border-radius:4px; border:1px solid rgba(255,255,255,0.3); background:rgba(255,255,255,0.1); color:#ececec; cursor:pointer;">食べログ用の指示を入れる</button>
+                <textarea id="scrape-instruction" class="scrape-instruction" placeholder="例: 店名・電話番号・住所を取得（食べログの場合は「食べログ用の指示を入れる」をクリック）"></textarea>
+                <div style="margin-top:8px; font-size:11px; color: rgba(255,255,255,0.75);">
+                    <label><input type="checkbox" id="scrape-follow-details" checked> 詳細ページをたどる（最大 <input type="number" id="scrape-max-detail" min="1" max="1000" value="1000" style="width:48px; padding:2px;"> 件）</label><br>
+                    <label style="margin-top:4px; display:inline-block;"><input type="checkbox" id="scrape-follow-pages" checked> 次ページをたどる（最大 <input type="number" id="scrape-max-pages" min="1" max="10" value="3" style="width:28px; padding:2px;"> ページ）</label>
+                </div>
+                <button type="button" id="scrape-run-btn">実行</button>
+                <div id="scrape-result" style="display:none;"></div>
+                <button type="button" id="scrape-download-btn" hidden>CSV をダウンロード</button>
+            </details>
             <details>
                 <summary>コンテキスト・追加情報</summary>
                 <div id="context-files" class="preview">読み込み中…</div>
@@ -434,7 +512,60 @@
                     opt.textContent = p.name;
                     presetSelect.appendChild(opt);
                 });
+                loadPresetPrompt(presetSelect.value);
             } catch (e) {}
+        }
+
+        const presetPromptEdit = document.getElementById("preset-prompt-edit");
+        const presetSaveBtn = document.getElementById("preset-save-btn");
+
+        async function loadPresetPrompt(presetId) {
+            if (!presetPromptEdit) return;
+            if (!presetId) { presetPromptEdit.value = ""; updatePresetSaveButton(); return; }
+            try {
+                const res = await fetch("/api/preset/" + encodeURIComponent(presetId));
+                const data = await res.json();
+                presetPromptEdit.value = (data.prompt || "").trim();
+            } catch (e) {
+                presetPromptEdit.value = "";
+            }
+            updatePresetSaveButton();
+        }
+
+        function updatePresetSaveButton() {
+            if (!presetSaveBtn) return;
+            const isDefault = (presetSelect && presetSelect.value === "default");
+            presetSaveBtn.disabled = isDefault;
+            presetSaveBtn.title = isDefault ? "標準は保存できません" : "この用途に上書き保存";
+        }
+
+        presetSelect.addEventListener("change", function () { loadPresetPrompt(presetSelect.value); });
+
+        if (presetSaveBtn) {
+            presetSaveBtn.addEventListener("click", async function () {
+                if (presetSaveBtn.disabled) return;
+                const id = presetSelect ? presetSelect.value : "";
+                if (!id) return;
+                const prompt = presetPromptEdit ? presetPromptEdit.value : "";
+                try {
+                    const res = await fetch("/api/preset/" + encodeURIComponent(id), {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ prompt: prompt })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.ok) {
+                        presetSaveBtn.textContent = "保存しました";
+                        setTimeout(function () { presetSaveBtn.textContent = "プリセットに保存"; }, 2000);
+                    } else {
+                        presetSaveBtn.textContent = "保存失敗";
+                        setTimeout(function () { presetSaveBtn.textContent = "プリセットに保存"; }, 2000);
+                    }
+                } catch (e) {
+                    presetSaveBtn.textContent = "保存失敗";
+                    setTimeout(function () { presetSaveBtn.textContent = "プリセットに保存"; }, 2000);
+                }
+            });
         }
         loadPresets();
 
@@ -507,7 +638,8 @@
                         history: history.slice(0, -1),
                         extra_context: extraContextEl ? extraContextEl.value : "",
                         model: modelSelect ? modelSelect.value : "",
-                        preset_id: presetSelect ? presetSelect.value : "default"
+                        preset_id: presetSelect ? presetSelect.value : "default",
+                        prompt_override: presetPromptEdit ? presetPromptEdit.value.trim() : ""
                     })
                 });
                 const data = await res.json();
@@ -543,6 +675,81 @@
                 sendMessage();
             }
         });
+
+        const scrapeUrlEl = document.getElementById("scrape-url");
+        const scrapeInstructionEl = document.getElementById("scrape-instruction");
+        const scrapeRunBtn = document.getElementById("scrape-run-btn");
+        const scrapeResultEl = document.getElementById("scrape-result");
+        const scrapeDownloadBtn = document.getElementById("scrape-download-btn");
+        let lastScrapeCsv = "";
+
+        if (scrapeRunBtn) {
+            scrapeRunBtn.addEventListener("click", async function () {
+                const url = scrapeUrlEl ? scrapeUrlEl.value.trim() : "";
+                const instruction = scrapeInstructionEl ? scrapeInstructionEl.value.trim() : "";
+                if (!url) { scrapeResultEl.textContent = "URL を入力してください"; scrapeResultEl.style.display = "block"; return; }
+                if (!instruction) { scrapeResultEl.textContent = "指示を入力してください"; scrapeResultEl.style.display = "block"; return; }
+                scrapeRunBtn.disabled = true;
+                scrapeResultEl.textContent = "取得・抽出中…";
+                scrapeResultEl.style.display = "block";
+                scrapeDownloadBtn.hidden = true;
+                var followDetails = document.getElementById("scrape-follow-details");
+                var followPages = document.getElementById("scrape-follow-pages");
+                var maxDetail = document.getElementById("scrape-max-detail");
+                var maxPages = document.getElementById("scrape-max-pages");
+                var payload = {
+                    url: url,
+                    instruction: instruction,
+                    follow_details: followDetails ? followDetails.checked : true,
+                    follow_pages: followPages ? followPages.checked : true,
+                    max_detail_pages: maxDetail ? parseInt(maxDetail.value, 10) || 15 : 15,
+                    max_pages: maxPages ? parseInt(maxPages.value, 10) || 3 : 3
+                };
+                try {
+                    const res = await fetch("/api/scrape", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        scrapeResultEl.textContent = "エラー: " + (data.error || res.status);
+                        return;
+                    }
+                    lastScrapeCsv = data.csv || "";
+                    scrapeResultEl.textContent = lastScrapeCsv.length > 500 ? lastScrapeCsv.slice(0, 500) + "\n… (" + lastScrapeCsv.length + " 文字)" : lastScrapeCsv;
+                    scrapeDownloadBtn.hidden = !lastScrapeCsv;
+                } catch (err) {
+                    scrapeResultEl.textContent = "エラー: " + err.message;
+                } finally {
+                    scrapeRunBtn.disabled = false;
+                }
+            });
+        }
+        var scrapeTabelogBtn = document.getElementById("scrape-tabelog-btn");
+        if (scrapeTabelogBtn && scrapeInstructionEl) {
+            scrapeTabelogBtn.addEventListener("click", function () {
+                scrapeInstructionEl.value = "店名、電話番号（予約・お問い合わせ）、住所、地域、ジャンル、評価、口コミ数、価格帯を取得。一覧ページの店名・地域・ジャンル・評価・口コミ数・価格帯と、詳細ページの店名・電話番号・住所を対応づけて1行にまとめ、CSVで出力。";
+            });
+        }
+        if (scrapeDownloadBtn) {
+            scrapeDownloadBtn.addEventListener("click", function () {
+                if (!lastScrapeCsv) return;
+                const bom = "\uFEFF";
+                const blob = new Blob([bom + lastScrapeCsv], { type: "text/csv;charset=utf-8" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, "0");
+                const d = String(now.getDate()).padStart(2, "0");
+                const h = String(now.getHours()).padStart(2, "0");
+                const mi = String(now.getMinutes()).padStart(2, "0");
+                a.download = "scrape_" + y + m + d + "_" + h + mi + ".csv";
+                a.click();
+                URL.revokeObjectURL(a.href);
+            });
+        }
     </script>
 </body>
 </html>
