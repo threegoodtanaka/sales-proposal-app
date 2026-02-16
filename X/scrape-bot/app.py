@@ -47,19 +47,37 @@ def fetch_url_html(url, max_bytes=2 * 1024 * 1024, timeout=15):
     if not url.startswith("http://") and not url.startswith("https://"):
         url = "https://" + url
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
     }
     if "tabelog.com" in url.lower():
         headers["Referer"] = "https://tabelog.com/"
+    elif "pokepara.jp" in url.lower():
+        headers["Referer"] = "https://www.pokepara.jp/"
     req = urllib.request.Request(url, data=None, method="GET", headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as res:
         raw = res.read(max_bytes)
+    
+    # gzip解凍が必要な場合
+    if raw[:2] == b'\x1f\x8b':
+        try:
+            import gzip
+            raw = gzip.decompress(raw)
+        except:
+            pass
+    
     for enc in ("utf-8", "cp932", "shift_jis", "iso-8859-1"):
         try:
-            return raw.decode(enc, errors="replace")
-        except Exception:
+            return raw.decode(enc)
+        except (UnicodeDecodeError, LookupError):
             continue
     return raw.decode("utf-8", errors="replace")
 
@@ -428,46 +446,98 @@ def _parse_pokepara_detail_page(html):
         return result
     
     try:
+        soup = BeautifulSoup(html, "html.parser") if BeautifulSoup else None
+        
         # 店舗名を抽出（<h1>タグから、余分な文字を除去）
-        m = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.I)
-        if m:
-            name = m.group(1).strip()
-            # "・" で区切られている場合は最初の部分を取得
-            name = re.sub(r'\s*[-–−]\s*[^-–−]+$', '', name)  # " - xxx" を除去
-            result["name"] = name
+        if soup:
+            h1 = soup.find("h1")
+            if h1:
+                name = h1.get_text(strip=True)
+                # 不要な部分を除去
+                name = re.sub(r'\s*[-–−]\s*[^-–−]+/(キャバクラ|ガールズバー)[^\n]*$', '', name)
+                name = re.sub(r'\s*[-–−]\s*[^-–−]+$', '', name)
+                result["name"] = name.strip()
         
-        # 地域・業態を抽出（「祇園 キャバクラ」のようなパターン）
-        m = re.search(r'([^\n/]{2,15})\s*(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ|パブ)', html)
-        if m:
-            result["area_type"] = f"{m.group(1).strip()} {m.group(2)}"
+        if not result["name"]:
+            m = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.I)
+            if m:
+                name = m.group(1).strip()
+                name = re.sub(r'\s*[-–−]\s*[^-–−]+$', '', name)
+                result["name"] = name
         
-        # 住所を抽出（都道府県から始まり、HTMLタグや余分な文字を除去）
-        patterns = [
+        # 地域・業態を抽出（より正確なパターン）
+        # パンくずリストやメタ情報から取得
+        if soup:
+            # パンくずリストから
+            breadcrumb = soup.find("div", class_=re.compile(r"breadcrumb", re.I))
+            if breadcrumb:
+                text = breadcrumb.get_text(strip=True)
+                # "京都 > 祇園 > キャバクラ" のようなパターンから抽出
+                parts = [p.strip() for p in text.split('>')]
+                if len(parts) >= 2:
+                    area = parts[-2] if len(parts) >= 2 else ""
+                    genre = parts[-1] if parts[-1] in ["キャバクラ", "ガールズバー", "ラウンジ", "スナック", "クラブ", "パブ"] else ""
+                    if area and genre:
+                        result["area_type"] = f"{area} {genre}"
+        
+        # フォールバック: HTMLから直接抽出
+        if not result["area_type"]:
+            patterns = [
+                r'(祇園|木屋町|先斗町|河原町|四条|三条|烏丸|京都駅|二条|西院|西京極)\s*(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ|パブ)',
+                r'([^\n/]{2,10}エリア[のに]*)\s*(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ|パブ)',
+            ]
+            for pattern in patterns:
+                m = re.search(pattern, html)
+                if m:
+                    result["area_type"] = f"{m.group(1).strip()} {m.group(2)}"
+                    break
+        
+        # 住所を抽出（より柔軟なパターン）
+        addr_patterns = [
+            r'住所[：:]\s*<[^>]+>([^<]+)<',
+            r'住所[：:]\s*([^\n<]{10,150})',
             r'(京都府京都市[^\n<"]{10,150})',
             r'(京都府[^\n<"]{10,150})',
             r'(大阪府[^\n<"]{10,150})',
             r'(東京都[^\n<"]{10,150})',
             r'([一-龥]{2,3}県[^\n<"]{10,150})',
+            r'〒\d{3}-\d{4}\s*([^\n<]{10,150})',
         ]
-        for pattern in patterns:
+        for pattern in addr_patterns:
             m = re.search(pattern, html)
             if m:
                 addr = m.group(1)
                 # HTMLタグを除去
                 addr = re.sub(r'<[^>]+>', '', addr)
-                # " /> や "name": などを除去
+                # 余分な文字を除去
                 addr = re.sub(r'"\s*/>', '', addr)
                 addr = re.sub(r'"[^"]*$', '', addr)
+                addr = re.sub(r'住所[：:]', '', addr)
                 addr = addr.strip()
-                if len(addr) > 10 and ('県' in addr or '都' in addr or '府' in addr):
+                if len(addr) > 10 and ('県' in addr or '都' in addr or '府' in addr or '市' in addr):
                     result["address"] = addr
                     break
         
-        # 電話番号を抽出
-        m = re.search(r'(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4})', html)
-        if m:
-            phone = m.group(1).replace(" ", "").replace("　", "")
-            result["phone"] = phone
+        # 電話番号を抽出（優先順位を考慮）
+        phone_patterns = [
+            # 明示的なラベル付き（最優先）
+            r'(?:tel|TEL|電話)[：:]\s*(0\d{1,4}[-]\d{1,4}[-]\d{4})',
+            # ハイフン区切りで3分割（優先）
+            r'(?<![0-9])(0\d{1,4}[-]\d{1,4}[-]\d{4})(?![0-9])',
+            # スペース区切り
+            r'(0\d{1,4}\s+\d{1,4}\s+\d{4})',
+            # ハイフンなし（最後の手段）
+            r'(?<![0-9])(0\d{9,10})(?![0-9])',
+        ]
+        for pattern in phone_patterns:
+            m = re.search(pattern, html, re.I)
+            if m:
+                phone = m.group(1).replace(" ", "").replace("　", "")
+                # 電話番号として妥当かチェック（10-11桁）
+                phone_digits = re.sub(r'[^0-9]', '', phone)
+                if 10 <= len(phone_digits) <= 11 and phone_digits.startswith('0'):
+                    result["phone"] = phone
+                    break
             
     except Exception as e:
         if DEBUG_MODE:

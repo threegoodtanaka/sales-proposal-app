@@ -68,63 +68,78 @@ def extract_shop_urls(html):
     return links
 
 def parse_shop_detail(html):
-    """店舗詳細ページから情報を抽出"""
+    """店舗詳細ページから情報を抽出（改善版）"""
     result = {"name": "", "area_type": "", "address": "", "phone": ""}
     
     soup = BeautifulSoup(html, "html.parser")
     
-    # 店舗名を抽出（<h1>タグから）
+    # 店舗名を抽出（<h1>タグから、余分な部分を除去）
     h1 = soup.find("h1")
     if h1:
-        result["name"] = h1.get_text(strip=True)
+        name = h1.get_text(strip=True)
+        # 不要な部分を除去
+        name = re.sub(r'\s*[-–−]\s*[^-–−]+/(キャバクラ|ガールズバー)[^\n]*$', '', name)
+        name = re.sub(r'\s*[-–−]\s*[^-–−]+$', '', name)
+        result["name"] = name.strip()
     
-    # パンくずリストやカテゴリから地域・業態を取得
-    # 例: "祇園 キャバクラ"
-    breadcrumb = soup.find("div", class_=re.compile(r"breadcrumb|category", re.I))
+    # 地域・業態を抽出（パンくずリストから）
+    breadcrumb = soup.find("div", class_=re.compile(r"breadcrumb", re.I))
     if breadcrumb:
         text = breadcrumb.get_text(strip=True)
-        # 地域とジャンルを抽出
-        parts = text.split()
+        parts = [p.strip() for p in text.split('>')]
         if len(parts) >= 2:
-            result["area_type"] = " ".join(parts[-2:])
+            area = parts[-2] if len(parts) >= 2 else ""
+            genre = parts[-1] if parts[-1] in ["キャバクラ", "ガールズバー", "ラウンジ", "スナック", "クラブ", "パブ"] else ""
+            if area and genre:
+                result["area_type"] = f"{area} {genre}"
     
-    # メタ情報やテキストから取得
+    # フォールバック: HTMLから直接抽出
     if not result["area_type"]:
-        # ページ内のテキストから「祇園 キャバクラ」のようなパターンを探す
-        m = re.search(r'([^\n]{2,10})\s+(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ)', html)
-        if m:
-            result["area_type"] = m.group(0).strip()
+        patterns = [
+            r'(祇園|木屋町|先斗町|河原町|四条|三条|烏丸|京都駅|二条|西院|西京極)\s*(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ|パブ)',
+            r'([^\n/]{2,10}エリア[のに]*)\s*(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ|パブ)',
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, html)
+            if m:
+                result["area_type"] = f"{m.group(1).strip()} {m.group(2)}"
+                break
     
-    # 住所を抽出
-    patterns = [
+    # 住所を抽出（より柔軟なパターン）
+    addr_patterns = [
+        r'住所[：:]\s*<[^>]+>([^<]+)<',
         r'住所[：:]\s*([^\n<]{10,150})',
-        r'(京都府京都市[^\n<]{10,150})',
-        r'(京都府[^\n<]{10,150})',
+        r'(京都府京都市[^\n<"]{10,150})',
+        r'(京都府[^\n<"]{10,150})',
         r'〒\d{3}-\d{4}\s*([^\n<]{10,150})',
     ]
-    for pattern in patterns:
+    for pattern in addr_patterns:
         m = re.search(pattern, html)
         if m:
-            addr = m.group(1) if '(' in pattern and pattern.count('(') > 1 else m.group(0)
+            addr = m.group(1)
             addr = re.sub(r'<[^>]+>', '', addr)
+            addr = re.sub(r'"\s*/>', '', addr)
+            addr = re.sub(r'"[^"]*$', '', addr)
             addr = re.sub(r'住所[：:]', '', addr)
             addr = addr.strip()
-            if len(addr) > 10 and '京都' in addr:
+            if len(addr) > 10 and ('京都' in addr or '県' in addr or '都' in addr or '府' in addr):
                 result["address"] = addr
                 break
     
-    # 電話番号を抽出
-    patterns = [
-        r'tel[：:]\s*(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4})',
-        r'電話[：:]\s*(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4})',
-        r'(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4})',
+    # 電話番号を抽出（優先順位を考慮）
+    phone_patterns = [
+        r'(?:tel|TEL|電話)[：:]\s*(0\d{1,4}[-]\d{1,4}[-]\d{4})',
+        r'(?<![0-9])(0\d{1,4}[-]\d{1,4}[-]\d{4})(?![0-9])',
+        r'(0\d{1,4}\s+\d{1,4}\s+\d{4})',
     ]
-    for pattern in patterns:
+    for pattern in phone_patterns:
         m = re.search(pattern, html, re.I)
         if m:
             phone = m.group(1).replace(" ", "").replace("　", "")
-            result["phone"] = phone
-            break
+            phone_digits = re.sub(r'[^0-9]', '', phone)
+            if 10 <= len(phone_digits) <= 11 and phone_digits.startswith('0'):
+                result["phone"] = phone
+                break
     
     return result
 
