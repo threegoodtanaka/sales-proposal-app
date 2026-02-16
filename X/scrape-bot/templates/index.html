@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スクレイピング専用ボット</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e8e8e8;
+            min-height: 100vh;
+        }
+        h1 {
+            font-size: 1.4rem;
+            margin: 0 0 20px 0;
+            font-weight: 600;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        label {
+            display: block;
+            font-size: 12px;
+            color: rgba(255,255,255,0.85);
+            margin-bottom: 4px;
+        }
+        .scrape-url, .scrape-instruction {
+            width: 100%;
+            margin-top: 4px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            color: #ececec;
+            font-size: 14px;
+        }
+        .scrape-instruction { min-height: 80px; resize: vertical; }
+        .options {
+            margin: 14px 0;
+            font-size: 13px;
+            color: rgba(255,255,255,0.8);
+        }
+        .options label { display: inline; margin-right: 12px; }
+        .options input[type="number"] {
+            width: 48px;
+            padding: 4px 6px;
+            margin: 0 4px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #ececec;
+            border-radius: 4px;
+        }
+        #scrape-run-btn {
+            padding: 10px 24px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(25,195,125,0.4);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        #scrape-run-btn:hover:not(:disabled) { background: rgba(25,195,125,0.6); }
+        #scrape-run-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        #scrape-result {
+            margin-top: 16px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 240px;
+            overflow: auto;
+            background: rgba(0,0,0,0.35);
+            padding: 12px;
+            border-radius: 8px;
+            font-family: Consolas, "Courier New", monospace;
+        }
+        #scrape-download-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.12);
+            color: #ececec;
+            cursor: pointer;
+        }
+        #scrape-download-btn:hover { background: rgba(255,255,255,0.2); }
+        #scrape-download-btn[hidden] { display: none; }
+        .tabelog-hint {
+            margin-left: 8px;
+            padding: 4px 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+        }
+        .tabelog-hint:hover { background: rgba(255,255,255,0.15); }
+        .note {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>スクレイピング専用ボット</h1>
+        <p style="margin:0 0 16px 0; font-size:13px; color: rgba(255,255,255,0.8);">
+            一覧ページのURLと「何を取得するか」の指示を入力し、実行するとCSVで結果を取得できます。食べログは自動で2ページ目まで取得し、店名・電話・住所などをプログラムで抽出します。
+        </p>
+
+        <label for="scrape-url">URL（一覧ページ）</label>
+        <input type="url" id="scrape-url" class="scrape-url" placeholder="https://tabelog.com/.../rstLst/..." autocomplete="off">
+
+        <label for="scrape-instruction" style="margin-top:12px;">指示（何を取得するか）</label>
+        <button type="button" class="tabelog-hint" id="scrape-tabelog-btn">食べログ用の指示を入れる</button>
+        <textarea id="scrape-instruction" class="scrape-instruction" placeholder="例: 店名・電話番号・住所を取得"></textarea>
+
+        <div class="options">
+            <label><input type="checkbox" id="scrape-follow-details" checked> 詳細ページをたどる（最大 <input type="number" id="scrape-max-detail" min="1" max="1000" value="1000"> 件）</label><br>
+            <label style="margin-top:6px; display:inline-block;"><input type="checkbox" id="scrape-follow-pages" checked> 次ページをたどる（最大 <input type="number" id="scrape-max-pages" min="1" max="10" value="3"> ページ）</label>
+        </div>
+
+        <button type="button" id="scrape-run-btn">実行</button>
+        <div id="scrape-result" style="display:none;"></div>
+        <button type="button" id="scrape-download-btn" hidden>CSV をダウンロード</button>
+
+        <p class="note">環境変数 OPENAI_API_KEY が必要です（食べログはプログラム抽出のため、他サイト向けのAI抽出時に使用）。</p>
+    </div>
+
+    <script>
+        const scrapeUrlEl = document.getElementById("scrape-url");
+        const scrapeInstructionEl = document.getElementById("scrape-instruction");
+        const scrapeRunBtn = document.getElementById("scrape-run-btn");
+        const scrapeResultEl = document.getElementById("scrape-result");
+        const scrapeDownloadBtn = document.getElementById("scrape-download-btn");
+        let lastScrapeCsv = "";
+
+        scrapeRunBtn.addEventListener("click", async function () {
+            const url = scrapeUrlEl ? scrapeUrlEl.value.trim() : "";
+            const instruction = scrapeInstructionEl ? scrapeInstructionEl.value.trim() : "";
+            if (!url) {
+                scrapeResultEl.textContent = "URL を入力してください";
+                scrapeResultEl.style.display = "block";
+                return;
+            }
+            if (!instruction) {
+                scrapeResultEl.textContent = "指示を入力してください";
+                scrapeResultEl.style.display = "block";
+                return;
+            }
+            scrapeRunBtn.disabled = true;
+            scrapeResultEl.textContent = "取得・抽出中…";
+            scrapeResultEl.style.display = "block";
+            scrapeDownloadBtn.hidden = true;
+            const followDetails = document.getElementById("scrape-follow-details");
+            const followPages = document.getElementById("scrape-follow-pages");
+            const maxDetail = document.getElementById("scrape-max-detail");
+            const maxPages = document.getElementById("scrape-max-pages");
+            const payload = {
+                url: url,
+                instruction: instruction,
+                follow_details: followDetails ? followDetails.checked : true,
+                follow_pages: followPages ? followPages.checked : true,
+                max_detail_pages: maxDetail ? parseInt(maxDetail.value, 10) || 1000 : 1000,
+                max_pages: maxPages ? parseInt(maxPages.value, 10) || 3 : 3
+            };
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(function () { controller.abort(); }, 180000);
+                const res = await fetch("/api/scrape", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                const data = await res.json();
+                if (!res.ok) {
+                    scrapeResultEl.textContent = "エラー: " + (data.error || res.status);
+                    return;
+                }
+                lastScrapeCsv = data.csv || "";
+                scrapeResultEl.textContent = lastScrapeCsv.length > 600
+                    ? lastScrapeCsv.slice(0, 600) + "\n… (" + lastScrapeCsv.length + " 文字)"
+                    : lastScrapeCsv;
+                scrapeDownloadBtn.hidden = !lastScrapeCsv;
+            } catch (err) {
+                if (err.name === "AbortError") {
+                    scrapeResultEl.textContent = "タイムアウトしました（3分）。件数が多い場合は「詳細ページをたどる」の最大件数を減らして再実行してください。";
+                } else {
+                    scrapeResultEl.textContent = "エラー: " + err.message;
+                }
+            } finally {
+                scrapeRunBtn.disabled = false;
+            }
+        });
+
+        document.getElementById("scrape-tabelog-btn").addEventListener("click", function () {
+            if (scrapeInstructionEl) {
+                scrapeInstructionEl.value = "店名、電話番号（予約・お問い合わせ）、住所、地域、ジャンル、評価、口コミ数、価格帯を取得。一覧の店名・地域・ジャンル・評価・口コミ数・価格帯と、詳細の店名・電話番号・住所を対応づけて1行にまとめ、CSVで出力。";
+            }
+        });
+
+        scrapeDownloadBtn.addEventListener("click", function () {
+            if (!lastScrapeCsv) return;
+            const bom = "\uFEFF";
+            const blob = new Blob([bom + lastScrapeCsv], { type: "text/csv;charset=utf-8" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, "0");
+            const d = String(now.getDate()).padStart(2, "0");
+            const h = String(now.getHours()).padStart(2, "0");
+            const mi = String(now.getMinutes()).padStart(2, "0");
+            a.download = "scrape_" + y + m + d + "_" + h + mi + ".csv";
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
+    </script>
+</body>
+</html>
