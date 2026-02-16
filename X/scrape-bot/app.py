@@ -140,14 +140,21 @@ def _extract_tabelog_urls_from_jsonld(html, limit=50):
 
 
 def _extract_detail_links(html, base_url, limit=50):
-    """一覧HTMLから詳細ページへのリンクを抽出。食べログは JSON-LD 優先。"""
+    """一覧HTMLから詳細ページへのリンクを抽出。食べログ・サントリーバーナビは専用処理。"""
     if not base_url:
         return []
     is_tabelog = "tabelog" in base_url.lower()
+    is_suntory = "bar-navi.suntory.co.jp" in base_url.lower()
+    
     if is_tabelog and html:
         jsonld_links = _extract_tabelog_urls_from_jsonld(html, limit=limit)
         if jsonld_links:
             return jsonld_links[:limit]
+    
+    if is_suntory and html:
+        suntory_links = _extract_suntory_detail_urls(html, limit=limit)
+        if suntory_links:
+            return suntory_links[:limit]
     if not BeautifulSoup:
         return []
     try:
@@ -323,6 +330,95 @@ def _parse_tabelog_list_blocks(html):
         print(f"[DEBUG] _parse_tabelog_list_blocks exception: {e!r}", flush=True)
         pass
     return out
+
+
+def _extract_suntory_detail_urls(html, limit=50):
+    """サントリーバーナビの一覧ページから詳細URLを抽出"""
+    links = []
+    if not html or not BeautifulSoup:
+        return links
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        # shop/数字/ のパターンを探す
+        for a in soup.find_all("a", href=True):
+            href = a.get("href", "").strip()
+            if "/shop/" in href and re.search(r"/shop/\d+/?$", href):
+                full_url = href if href.startswith("http") else f"https://bar-navi.suntory.co.jp{href}"
+                if full_url not in links:
+                    links.append(full_url)
+                    if len(links) >= limit:
+                        break
+    except Exception as e:
+        if DEBUG_MODE:
+            print(f"[DEBUG] サントリーURL抽出エラー: {e!r}", flush=True)
+    return links
+
+
+def _parse_suntory_detail_page(html):
+    """サントリーバーナビ詳細ページから店名・住所・電話を抽出"""
+    result = {"name": "", "address": "", "phone": ""}
+    if not html:
+        return result
+    
+    try:
+        # 店舗名を抽出（<h1>タグから）
+        m = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.I)
+        if m:
+            result["name"] = m.group(1).strip()
+        
+        # 住所を抽出（都道府県から始まるパターン）
+        m = re.search(r'(京都府|大阪府|東京都|[一-龥]{2,3}県)[^\n<]{5,100}', html)
+        if m:
+            addr = m.group(0).strip()
+            # HTMLタグを除去
+            addr = re.sub(r'<[^>]+>', '', addr)
+            # 余分な空白を削除
+            addr = re.sub(r'\s+', '', addr)
+            if len(addr) > 5:
+                result["address"] = addr
+        
+        # 電話番号を抽出（0xx-xxx-xxxx形式）
+        m = re.search(r'0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4}', html)
+        if m:
+            phone = m.group(0).replace(" ", "").replace("　", "")
+            result["phone"] = phone
+            
+    except Exception as e:
+        if DEBUG_MODE:
+            print(f"[DEBUG] サントリー詳細パースエラー: {e!r}", flush=True)
+    
+    return result
+
+
+def _build_suntory_csv_from_chunks(chunks):
+    """サントリーバーナビのchunksからCSVを生成"""
+    rows = []
+    for label, html in chunks:
+        if "詳細" in label:
+            detail = _parse_suntory_detail_page(html)
+            if detail.get("name") or detail.get("phone"):
+                rows.append(detail)
+    
+    if not rows:
+        return ""
+    
+    # ゼロ幅文字を除去
+    _zw = "\u200b\u200c\u200d\ufeff"
+    def _s(s):
+        if s is None:
+            return ""
+        s = str(s).strip()
+        return "".join(c for c in s if c not in _zw)
+    
+    header = ["店舗名", "住所", "電話番号"]
+    buf = [",".join(header)]
+    for r in rows:
+        def q(s):
+            s = _s(s).replace('"', '""')
+            return f'"{s}"' if "," in s or "\n" in s or '"' in s else s
+        buf.append(",".join(q(r.get(k, "")) for k in ["name", "address", "phone"]))
+    
+    return "\r\n".join(buf)
 
 
 def _parse_tabelog_detail_page(html):
@@ -522,11 +618,25 @@ def api_scrape():
     
     if err and not chunks:
         return jsonify({"error": err}), 500
+    
     is_tabelog = "tabelog.com" in url.lower()
+    is_suntory = "bar-navi.suntory.co.jp" in url.lower()
+    
     if is_tabelog:
-        print(f"[DEBUG] 食べログとして処理開始", flush=True)
+        if DEBUG_MODE:
+            print(f"[DEBUG] 食べログとして処理開始", flush=True)
         programmatic_csv = _build_tabelog_csv_from_chunks(chunks)
-        print(f"[DEBUG] CSV生成完了: 行数={programmatic_csv.count(chr(10)) if programmatic_csv else 0}, 文字数={len(programmatic_csv) if programmatic_csv else 0}", flush=True)
+        if DEBUG_MODE:
+            print(f"[DEBUG] CSV生成完了: 行数={programmatic_csv.count(chr(10)) if programmatic_csv else 0}, 文字数={len(programmatic_csv) if programmatic_csv else 0}", flush=True)
+        if programmatic_csv and programmatic_csv.count("\n") >= 1:
+            return jsonify({"csv": programmatic_csv})
+    
+    if is_suntory:
+        if DEBUG_MODE:
+            print(f"[DEBUG] サントリーバーナビとして処理開始", flush=True)
+        programmatic_csv = _build_suntory_csv_from_chunks(chunks)
+        if DEBUG_MODE:
+            print(f"[DEBUG] CSV生成完了: 行数={programmatic_csv.count(chr(10)) if programmatic_csv else 0}, 文字数={len(programmatic_csv) if programmatic_csv else 0}", flush=True)
         if programmatic_csv and programmatic_csv.count("\n") >= 1:
             return jsonify({"csv": programmatic_csv})
     try:
