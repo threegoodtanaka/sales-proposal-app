@@ -112,7 +112,7 @@
     <div class="container">
         <h1>スクレイピング専用ボット</h1>
         <p style="margin:0 0 16px 0; font-size:13px; color: rgba(255,255,255,0.8);">
-            一覧ページのURLと「何を取得するか」の指示を入力し、実行するとCSVで結果を取得できます。食べログ・サントリーバーナビは自動で詳細ページをたどり、店名・電話・住所などをプログラムで抽出します。
+            一覧ページのURLと「何を取得するか」の指示を入力し、実行するとCSVで結果を取得できます。食べログ・ポケパラは自動で詳細ページをたどり、店名・電話・住所などをプログラムで抽出します。
         </p>
 
         <label for="scrape-url">URL（一覧ページ）</label>
@@ -120,7 +120,7 @@
 
         <label for="scrape-instruction" style="margin-top:12px;">指示（何を取得するか）</label>
         <button type="button" class="tabelog-hint" id="scrape-tabelog-btn">食べログ用の指示を入れる</button>
-        <button type="button" class="tabelog-hint" id="scrape-suntory-btn">サントリーバーナビ用の指示を入れる</button>
+        <button type="button" class="tabelog-hint" id="scrape-pokepara-btn">ポケパラ用の指示を入れる</button>
         <textarea id="scrape-instruction" class="scrape-instruction" placeholder="例: 店名・電話番号・住所を取得"></textarea>
 
         <div class="options">
@@ -132,7 +132,7 @@
         <div id="scrape-result" style="display:none;"></div>
         <button type="button" id="scrape-download-btn" hidden>CSV をダウンロード</button>
 
-        <p class="note">環境変数 OPENAI_API_KEY が必要です（食べログ・サントリーバーナビはプログラム抽出のため不要、他サイト向けのAI抽出時に使用）。</p>
+        <p class="note">環境変数 OPENAI_API_KEY が必要です（食べログ・ポケパラはプログラム抽出のため不要、他サイト向けのAI抽出時に使用）。</p>
     </div>
 
     <script>
@@ -209,9 +209,9 @@
             }
         });
 
-        document.getElementById("scrape-suntory-btn").addEventListener("click", function () {
+        document.getElementById("scrape-pokepara-btn").addEventListener("click", function () {
             if (scrapeInstructionEl) {
-                scrapeInstructionEl.value = "店舗名、住所、電話番号を取得。各店舗の詳細ページから情報を取得し、CSVで出力。";
+                scrapeInstructionEl.value = "店舗名、地域・業態、住所、電話番号を取得。各店舗の詳細ページから情報を取得し、CSVで出力。";
             }
         });
 

@@ -140,11 +140,12 @@ def _extract_tabelog_urls_from_jsonld(html, limit=50):
 
 
 def _extract_detail_links(html, base_url, limit=50):
-    """一覧HTMLから詳細ページへのリンクを抽出。食べログ・サントリーバーナビは専用処理。"""
+    """一覧HTMLから詳細ページへのリンクを抽出。食べログ・サントリーバーナビ・ポケパラは専用処理。"""
     if not base_url:
         return []
     is_tabelog = "tabelog" in base_url.lower()
     is_suntory = "bar-navi.suntory.co.jp" in base_url.lower()
+    is_pokepara = "pokepara.jp" in base_url.lower()
     
     if is_tabelog and html:
         jsonld_links = _extract_tabelog_urls_from_jsonld(html, limit=limit)
@@ -155,6 +156,11 @@ def _extract_detail_links(html, base_url, limit=50):
         suntory_links = _extract_suntory_detail_urls(html, limit=limit)
         if suntory_links:
             return suntory_links[:limit]
+    
+    if is_pokepara and html:
+        pokepara_links = _extract_pokepara_detail_urls(html, base_url, limit=limit)
+        if pokepara_links:
+            return pokepara_links[:limit]
     if not BeautifulSoup:
         return []
     try:
@@ -354,6 +360,31 @@ def _extract_suntory_detail_urls(html, limit=50):
     return links
 
 
+def _extract_pokepara_detail_urls(html, base_url, limit=50):
+    """ポケパラの一覧ページから詳細URLを抽出"""
+    links = []
+    if not html or not BeautifulSoup:
+        return links
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+        seen = set()
+        for a in soup.find_all("a", href=True):
+            href = a.get("href", "").strip()
+            # /shop数字/ のパターンで、tainewドメインは除外
+            if "/shop" in href and re.search(r'/shop\d+/?$', href) and "tainew" not in href:
+                if not href.startswith("http"):
+                    href = urllib.parse.urljoin(base_url, href)
+                if href not in seen:
+                    seen.add(href)
+                    links.append(href)
+                    if len(links) >= limit:
+                        break
+    except Exception as e:
+        if DEBUG_MODE:
+            print(f"[DEBUG] ポケパラURL抽出エラー: {e!r}", flush=True)
+    return links
+
+
 def _parse_suntory_detail_page(html):
     """サントリーバーナビ詳細ページから店名・住所・電話を抽出"""
     result = {"name": "", "address": "", "phone": ""}
@@ -390,6 +421,61 @@ def _parse_suntory_detail_page(html):
     return result
 
 
+def _parse_pokepara_detail_page(html):
+    """ポケパラ詳細ページから店名・地域業態・住所・電話を抽出"""
+    result = {"name": "", "area_type": "", "address": "", "phone": ""}
+    if not html:
+        return result
+    
+    try:
+        # 店舗名を抽出（<h1>タグから、余分な文字を除去）
+        m = re.search(r'<h1[^>]*>([^<]+)</h1>', html, re.I)
+        if m:
+            name = m.group(1).strip()
+            # "・" で区切られている場合は最初の部分を取得
+            name = re.sub(r'\s*[-–−]\s*[^-–−]+$', '', name)  # " - xxx" を除去
+            result["name"] = name
+        
+        # 地域・業態を抽出（「祇園 キャバクラ」のようなパターン）
+        m = re.search(r'([^\n/]{2,15})\s*(キャバクラ|ガールズバー|ラウンジ|スナック|クラブ|パブ)', html)
+        if m:
+            result["area_type"] = f"{m.group(1).strip()} {m.group(2)}"
+        
+        # 住所を抽出（都道府県から始まり、HTMLタグや余分な文字を除去）
+        patterns = [
+            r'(京都府京都市[^\n<"]{10,150})',
+            r'(京都府[^\n<"]{10,150})',
+            r'(大阪府[^\n<"]{10,150})',
+            r'(東京都[^\n<"]{10,150})',
+            r'([一-龥]{2,3}県[^\n<"]{10,150})',
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, html)
+            if m:
+                addr = m.group(1)
+                # HTMLタグを除去
+                addr = re.sub(r'<[^>]+>', '', addr)
+                # " /> や "name": などを除去
+                addr = re.sub(r'"\s*/>', '', addr)
+                addr = re.sub(r'"[^"]*$', '', addr)
+                addr = addr.strip()
+                if len(addr) > 10 and ('県' in addr or '都' in addr or '府' in addr):
+                    result["address"] = addr
+                    break
+        
+        # 電話番号を抽出
+        m = re.search(r'(0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{4})', html)
+        if m:
+            phone = m.group(1).replace(" ", "").replace("　", "")
+            result["phone"] = phone
+            
+    except Exception as e:
+        if DEBUG_MODE:
+            print(f"[DEBUG] ポケパラ詳細パースエラー: {e!r}", flush=True)
+    
+    return result
+
+
 def _build_suntory_csv_from_chunks(chunks):
     """サントリーバーナビのchunksからCSVを生成"""
     rows = []
@@ -417,6 +503,37 @@ def _build_suntory_csv_from_chunks(chunks):
             s = _s(s).replace('"', '""')
             return f'"{s}"' if "," in s or "\n" in s or '"' in s else s
         buf.append(",".join(q(r.get(k, "")) for k in ["name", "address", "phone"]))
+    
+    return "\r\n".join(buf)
+
+
+def _build_pokepara_csv_from_chunks(chunks):
+    """ポケパラのchunksからCSVを生成"""
+    rows = []
+    for label, html in chunks:
+        if "詳細" in label:
+            detail = _parse_pokepara_detail_page(html)
+            if detail.get("name") or detail.get("phone"):
+                rows.append(detail)
+    
+    if not rows:
+        return ""
+    
+    # ゼロ幅文字を除去
+    _zw = "\u200b\u200c\u200d\ufeff"
+    def _s(s):
+        if s is None:
+            return ""
+        s = str(s).strip()
+        return "".join(c for c in s if c not in _zw)
+    
+    header = ["店舗名", "地域・業態", "住所", "電話番号"]
+    buf = [",".join(header)]
+    for r in rows:
+        def q(s):
+            s = _s(s).replace('"', '""')
+            return f'"{s}"' if "," in s or "\n" in s or '"' in s else s
+        buf.append(",".join(q(r.get(k, "")) for k in ["name", "area_type", "address", "phone"]))
     
     return "\r\n".join(buf)
 
@@ -621,6 +738,7 @@ def api_scrape():
     
     is_tabelog = "tabelog.com" in url.lower()
     is_suntory = "bar-navi.suntory.co.jp" in url.lower()
+    is_pokepara = "pokepara.jp" in url.lower()
     
     if is_tabelog:
         if DEBUG_MODE:
@@ -635,6 +753,15 @@ def api_scrape():
         if DEBUG_MODE:
             print(f"[DEBUG] サントリーバーナビとして処理開始", flush=True)
         programmatic_csv = _build_suntory_csv_from_chunks(chunks)
+        if DEBUG_MODE:
+            print(f"[DEBUG] CSV生成完了: 行数={programmatic_csv.count(chr(10)) if programmatic_csv else 0}, 文字数={len(programmatic_csv) if programmatic_csv else 0}", flush=True)
+        if programmatic_csv and programmatic_csv.count("\n") >= 1:
+            return jsonify({"csv": programmatic_csv})
+    
+    if is_pokepara:
+        if DEBUG_MODE:
+            print(f"[DEBUG] ポケパラとして処理開始", flush=True)
+        programmatic_csv = _build_pokepara_csv_from_chunks(chunks)
         if DEBUG_MODE:
             print(f"[DEBUG] CSV生成完了: 行数={programmatic_csv.count(chr(10)) if programmatic_csv else 0}, 文字数={len(programmatic_csv) if programmatic_csv else 0}", flush=True)
         if programmatic_csv and programmatic_csv.count("\n") >= 1:
