@@ -48,7 +48,52 @@ python app.py
 - `requirements.txt` … flask, beautifulsoup4, gunicorn
 - `render.yaml` … Render デプロイ設定
 
-## Web公開（Render で無料デプロイ）
+## Web公開
+
+### オプション1: Vercel（推奨 - 簡単・高速）
+
+#### 前提条件
+- Vercelアカウント
+- GitHubリポジトリにプッシュ済み
+
+#### デプロイ手順
+
+1. **Vercel にログイン**
+   - [https://vercel.com/](https://vercel.com/) にアクセス
+   - GitHubアカウントでログイン
+
+2. **新しいプロジェクトを作成**
+   - ダッシュボードで **Add New...** → **Project** を選択
+   - GitHubリポジトリを接続（`sales-proposal-app`）
+   - **Import** をクリック
+
+3. **設定**
+   - **Project Name**: `scrape-bot`（任意）
+   - **Framework Preset**: `Other`
+   - **Root Directory**: `X/scrape-bot` を選択
+   - **Build Settings**: デフォルトのまま
+   - **Environment Variables**（オプション）:
+     - `OPENAI_API_KEY`: あなたのAPIキー（食べログ以外をスクレイピングする場合のみ）
+
+4. **デプロイ**
+   - **Deploy** をクリック
+   - 1〜3分でデプロイ完了
+
+5. **完了**
+   - `https://scrape-bot-xxxx.vercel.app` でアクセス可能
+
+#### Vercel の特徴
+- ✅ デプロイが非常に高速（1〜3分）
+- ✅ スリープなし（常時稼働）
+- ✅ 自動HTTPS
+- ⚠️ 無料プランの制限:
+  - Serverless Functions: 10秒タイムアウト
+  - 大量の詳細ページ取得は時間がかかる可能性あり
+  - 最大20件程度の取得を推奨
+
+---
+
+### オプション2: Render（長時間実行向け）
 
 ### 前提条件
 - GitHubアカウント
