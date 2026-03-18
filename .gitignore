@@ -24,6 +24,11 @@ __pycache__/
 .venv
 venv
 
+# Slack RAG ローカルデータ（クラウドでは永続ボリュームに保存）
+X/slack_rag_data/
+*.db
+*.env.txt
+
 # IDE
 .idea
 .vscode
