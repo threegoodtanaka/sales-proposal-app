@@ -252,6 +252,39 @@ def fill_and_submit_form(
     if filled_count == 0:
         return {"success": False, "submitted": False, "detail": "入力可能なフィールドが見つかりませんでした"}
 
+    # ── プライバシーポリシー等の同意チェックボックスを自動ON ──
+    AGREE_KWS = [
+        "プライバシー", "privacy", "個人情報", "利用規約", "同意", "agree",
+        "terms", "規約", "ポリシー", "policy", "consent",
+    ]
+    try:
+        checkboxes = page.query_selector_all("input[type=checkbox]")
+        for cb in checkboxes:
+            cb_name  = (cb.get_attribute("name")  or "").lower()
+            cb_id    = (cb.get_attribute("id")    or "").lower()
+            cb_value = (cb.get_attribute("value") or "").lower()
+            # label テキストも確認
+            label_text = ""
+            cb_id_raw = cb.get_attribute("id") or ""
+            if cb_id_raw:
+                lbl = page.query_selector(f"label[for='{cb_id_raw}']")
+                if lbl:
+                    label_text = (lbl.inner_text() or "").lower()
+            # 親要素のテキストも参考にする
+            try:
+                parent_text = (cb.evaluate("el => el.closest('label,p,div,li')?.innerText || ''") or "").lower()
+            except Exception:
+                parent_text = ""
+
+            combined = f"{cb_name} {cb_id} {cb_value} {label_text} {parent_text}"
+            if any(kw in combined for kw in AGREE_KWS):
+                if not cb.is_checked():
+                    cb.check()
+                    print("  ✓ 同意チェックボックスをONにしました")
+                    time.sleep(0.3)
+    except Exception as e:
+        print(f"  [WARN] チェックボックス処理中エラー: {e}")
+
     if dry_run:
         return {"success": True, "submitted": False, "detail": f"ドライラン: {filled_count}フィールドに入力完了（送信スキップ）"}
 
