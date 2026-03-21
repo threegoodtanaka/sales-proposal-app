@@ -288,66 +288,88 @@ def fill_and_submit_form(
     if dry_run:
         return {"success": True, "submitted": False, "detail": f"ドライラン: {filled_count}フィールドに入力完了（送信スキップ）"}
 
-    # ── 送信ボタン検索（優先度順）────────────────────────────
-    SUBMIT_TEXT_KWS = [
-        "送信", "確認", "送る", "申込", "問い合わせる", "次へ", "進む",
-        "submit", "send", "confirm", "next", "apply", "go",
-    ]
+    # ── 送信ボタン検索＋確認画面対応（最大2ステップ）────────
+    # 「確認」→確認画面→「送信」の2ステップフォームに対応する
+    FINAL_KWS   = ["送信", "送る", "申込", "問い合わせる", "submit", "send"]
+    CONFIRM_KWS = ["確認", "次へ", "進む", "confirm", "next", "apply", "go"]
 
-    def _try_click(btn):
-        """ボタンをクリックしてページ遷移を待つ。成功したら True を返す。"""
+    def _get_btn_text(el):
         try:
-            if not btn or not btn.is_visible():
-                return False
-            btn.scroll_into_view_if_needed()
-            btn.click()
-            page.wait_for_load_state("networkidle", timeout=15000)
-            return True
-        except Exception:
-            return False
-
-    # 1) type=submit / button[type=submit]
-    for sel in ("input[type=submit]", "button[type=submit]", "[type=submit]"):
-        btn = page.query_selector(sel)
-        if _try_click(btn):
-            return {"success": True, "submitted": True, "detail": f"送信完了（{filled_count}フィールド入力）"}
-
-    # 2) input[type=image]（画像ボタン）
-    btn = page.query_selector("input[type=image]")
-    if _try_click(btn):
-        return {"success": True, "submitted": True, "detail": f"送信完了（画像ボタン）"}
-
-    # 3) ボタン・リンク系要素をテキストで探す
-    candidates = page.query_selector_all(
-        "button, input[type=button], input[type=submit], "
-        "a[role=button], [role=button], .btn, .button"
-    )
-    for el in candidates:
-        try:
-            text = " ".join(filter(None, [
+            return " ".join(filter(None, [
                 el.inner_text(),
                 el.get_attribute("value"),
                 el.get_attribute("aria-label"),
                 el.get_attribute("title"),
-            ])).lower()
-            if any(kw in text for kw in SUBMIT_TEXT_KWS):
-                if _try_click(el):
-                    return {"success": True, "submitted": True, "detail": f"送信完了（テキスト一致: {text[:20]}）"}
+            ])).lower().strip()
         except Exception:
-            continue
+            return ""
 
-    # 4) フォームの最後のボタンをフォールバックで試す
+    def _find_and_click_btn(priority_kws, fallback_kws=None):
+        """優先キーワード→次点キーワード→type=submit→末尾ボタンの順で探してクリック"""
+        candidates = page.query_selector_all(
+            "input[type=submit], input[type=image], input[type=button], "
+            "button, a[role=button], [role=button], .btn, .button"
+        )
+
+        # 優先キーワードで探す
+        for kws in ([priority_kws] + ([fallback_kws] if fallback_kws else [])):
+            for el in candidates:
+                try:
+                    if not el.is_visible():
+                        continue
+                    text = _get_btn_text(el)
+                    if any(kw in text for kw in kws):
+                        el.scroll_into_view_if_needed()
+                        el.click()
+                        page.wait_for_load_state("networkidle", timeout=15000)
+                        return text or "?"
+                except Exception:
+                    continue
+
+        # type=submit を最後に試す
+        for sel in ("input[type=submit]", "button[type=submit]", "[type=submit]", "input[type=image]"):
+            try:
+                btn = page.query_selector(sel)
+                if btn and btn.is_visible():
+                    btn.scroll_into_view_if_needed()
+                    btn.click()
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                    return sel
+            except Exception:
+                continue
+
+        # フォーム末尾ボタンをフォールバック
+        try:
+            for form in page.query_selector_all("form"):
+                btns = [b for b in form.query_selector_all(
+                    "button, input[type=submit], input[type=button]") if b.is_visible()]
+                if btns:
+                    btns[-1].scroll_into_view_if_needed()
+                    btns[-1].click()
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                    return "form-last-button"
+        except Exception:
+            pass
+
+        return None
+
+    # STEP A: まず「送信」系を探す。なければ「確認」系を押す
+    clicked = _find_and_click_btn(FINAL_KWS, CONFIRM_KWS)
+    if not clicked:
+        return {"success": False, "submitted": False, "detail": "送信ボタンが見つかりませんでした"}
+
+    # 確認画面に遷移した可能性があるのでもう一度「送信」を探す（最大1回）
+    time.sleep(1)
     try:
-        forms = page.query_selector_all("form")
-        for form in forms:
-            btns = form.query_selector_all("button, input[type=button], input[type=submit]")
-            if btns:
-                if _try_click(btns[-1]):
-                    return {"success": True, "submitted": True, "detail": f"送信完了（フォーム末尾ボタン）"}
+        second = _find_and_click_btn(FINAL_KWS)
+        if second:
+            print(f"  ✓ 確認画面から最終送信: 「{second}」")
+            return {"success": True, "submitted": True, "detail": f"送信完了（確認画面経由: {second[:30]}）"}
     except Exception:
         pass
 
-    return {"success": False, "submitted": False, "detail": "送信ボタンが見つかりませんでした"}
+    # 1回のクリックで完了した場合（確認画面なしフォーム）
+    return {"success": True, "submitted": True, "detail": f"送信完了（{clicked[:30]}）"}
 
 
 # ══════════════════════════════════════════════════════════════
