@@ -315,6 +315,187 @@ def append_result(csv_path: str, row: dict):
 
 
 # ══════════════════════════════════════════════════════════════
+# プレビュー生成（Playwright不要・メッセージ生成のみ）
+# ══════════════════════════════════════════════════════════════
+def generate_preview(
+    companies: list[dict],
+    cfg: dict,
+    limit: int = 0,
+    log_callback=None,
+) -> list[dict]:
+    """
+    Playwrightを使わずにメッセージだけ生成して返す。
+    Returns: [{"idx", "会社名", "フォームURL", "訴求", "件名", "本文", "スキップ", "スキップ理由"}, ...]
+    """
+    def log(msg):
+        print(msg)
+        if log_callback:
+            log_callback(msg)
+
+    sender   = cfg["sender"]
+    service  = cfg["service"]
+    appeals  = cfg["appeal_angles"]
+    settings = cfg["settings"]
+    skip_kws = cfg["skip_keywords"]
+    provider = settings.get("ai_provider", "anthropic")
+
+    if provider == "openai":
+        import openai as _openai
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            log("[ERROR] OPENAI_API_KEY が設定されていません")
+            return []
+        client = _openai.OpenAI(api_key=api_key)
+    else:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            log("[ERROR] ANTHROPIC_API_KEY が設定されていません")
+            return []
+        client = anthropic.Anthropic(api_key=api_key)
+
+    results = []
+    appeal_index = 0
+    targets = companies[:limit] if limit else companies
+
+    for i, company in enumerate(targets):
+        company_name = company.get("会社名", f"企業{i+1}").strip()
+        form_url     = company.get("フォームURL", "").strip()
+        log(f"[{i+1}/{len(targets)}] {company_name} — メッセージ生成中...")
+
+        if not form_url:
+            results.append({"idx": i, "会社名": company_name, "フォームURL": "",
+                             "訴求": "", "件名": "", "本文": "", "スキップ": True, "スキップ理由": "URLなし"})
+            continue
+
+        # 訴求角度選択
+        override = company.get("訴求角度override", "").strip()
+        appeal   = next((a for a in appeals if a["id"] == override), None) if override else None
+        if not appeal:
+            appeal = appeals[appeal_index % len(appeals)]
+        appeal_index += 1
+
+        try:
+            # フィールド情報なしで生成（後でフォーム検出時に上書き可）
+            message = generate_message(client, company, appeal, sender, service,
+                                       ["name", "email", "company", "message", "subject"],
+                                       provider=provider)
+            results.append({
+                "idx": i, "会社名": company_name, "フォームURL": form_url,
+                "訴求": appeal["label"],
+                "件名": message.get("subject", ""),
+                "本文": message.get("body", ""),
+                "スキップ": False, "スキップ理由": "",
+            })
+            log(f"  ✓ 件名: {message.get('subject','')[:40]}")
+        except Exception as e:
+            log(f"  → エラー（{e}）")
+            results.append({"idx": i, "会社名": company_name, "フォームURL": form_url,
+                             "訴求": appeal["label"], "件名": "", "本文": "",
+                             "スキップ": True, "スキップ理由": f"生成エラー: {str(e)[:80]}"})
+
+    log(f"\nプレビュー生成完了: {len([r for r in results if not r['スキップ']])}件生成 / {len(results)}件中")
+    return results
+
+
+# ══════════════════════════════════════════════════════════════
+# プレビューから実際に送信
+# ══════════════════════════════════════════════════════════════
+def send_preview(
+    preview_items: list[dict],
+    cfg: dict,
+    output_csv: str = "",
+    log_callback=None,
+) -> dict:
+    """
+    generate_preview() の結果（編集済み）を受け取り、フォームに送信する。
+    preview_items の "スキップ" が True のものは除外済みを想定。
+    """
+    def log(msg):
+        print(msg)
+        if log_callback:
+            log_callback(msg)
+
+    sender   = cfg["sender"]
+    settings = cfg["settings"]
+    skip_kws = cfg["skip_keywords"]
+    timeout    = settings.get("page_load_timeout", 30) * 1000
+    fill_delay = settings.get("form_fill_delay", 0.5)
+    wait_sec   = settings.get("wait_between_seconds", 10)
+    output_csv = output_csv or str(BASE_DIR / settings.get("output_csv", "results.csv"))
+
+    processed = skipped = errors = 0
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox",
+                  "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
+        )
+
+        for i, item in enumerate(preview_items):
+            company_name = item.get("会社名", "")
+            form_url     = item.get("フォームURL", "")
+            log(f"[{i+1}/{len(preview_items)}] {company_name}")
+
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                locale="ja-JP", timezone_id="Asia/Tokyo",
+            )
+            page = context.new_page()
+
+            try:
+                page.goto(form_url, timeout=timeout, wait_until="domcontentloaded")
+                page.wait_for_load_state("networkidle", timeout=timeout)
+                page_text = page.inner_text("body")
+            except Exception as e:
+                log(f"  → エラー（ページ読み込み: {e}）")
+                append_result(output_csv, {"会社名": company_name, "フォームURL": form_url,
+                    "ステータス": "エラー", "エラー詳細": str(e)[:200],
+                    "件名": item.get("件名",""), "送信メッセージ": item.get("本文",""),
+                    "処理日時": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+                errors += 1; context.close(); continue
+
+            matched_kw = detect_warning(page_text, skip_kws)
+            if matched_kw:
+                log(f"  → スキップ（警告検出: 「{matched_kw}」）")
+                append_result(output_csv, {"会社名": company_name, "フォームURL": form_url,
+                    "ステータス": "スキップ", "スキップ理由": f"警告: 「{matched_kw}」",
+                    "処理日時": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+                skipped += 1; context.close(); continue
+
+            fields = detect_form_fields(page)
+            message = {"subject": item.get("件名", ""), "body": item.get("本文", "")}
+            result = fill_and_submit_form(page, fields, sender, message,
+                                          fill_delay=fill_delay, dry_run=False)
+            status = "送信済み" if result["submitted"] else "エラー"
+            log(f"  → {status}: {result['detail']}")
+
+            append_result(output_csv, {
+                "会社名": company_name, "フォームURL": form_url,
+                "ステータス": status, "使用した訴求": item.get("訴求",""),
+                "件名": item.get("件名",""), "送信メッセージ": item.get("本文",""),
+                "処理日時": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "エラー詳細": result["detail"] if not result["success"] else "",
+            })
+
+            context.close()
+            if result["submitted"]:
+                processed += 1
+            else:
+                errors += 1
+
+            if i < len(preview_items) - 1:
+                log(f"  次の送信まで {wait_sec}秒 待機中...")
+                time.sleep(wait_sec)
+
+        browser.close()
+
+    log(f"\n送信完了: {processed}件送信 / {skipped}件スキップ / {errors}件エラー")
+    return {"processed": processed, "skipped": skipped, "errors": errors, "output_csv": output_csv}
+
+
+# ══════════════════════════════════════════════════════════════
 # バッチ実行（Web / CLI 共通エントリポイント）
 # ══════════════════════════════════════════════════════════════
 def run_bot(

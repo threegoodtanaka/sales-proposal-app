@@ -25,7 +25,7 @@ import yaml
 from flask import (Flask, render_template, request, jsonify,
                    Response, send_file, stream_with_context)
 
-from form_bot import load_config, load_input_csv, run_bot, BASE_DIR, CONFIG_FILE
+from form_bot import load_config, load_input_csv, run_bot, generate_preview, send_preview, BASE_DIR, CONFIG_FILE
 
 # ── APIキー永続化ファイル（gitignore対象）───────────────────
 KEYS_FILE = BASE_DIR / ".keys.json"
@@ -65,6 +65,10 @@ def mask_key(key: str) -> str:
 # 起動時にキーをロード
 load_keys()
 
+def _parse_csv_text(csv_text: str) -> list[dict]:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    return list(reader)
+
 # ── アプリ初期化 ─────────────────────────────────────────────
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -96,6 +100,7 @@ _state = {
     "result": None,
     "output_csv": None,
     "thread": None,
+    "preview": [],          # generate_preview() の結果を保持
 }
 
 def _log(msg: str):
@@ -264,6 +269,91 @@ def download():
     )
 
 
+@app.route("/api/preview", methods=["POST"])
+@requires_auth
+def preview():
+    """CSV を受け取り、Playwrightなしでメッセージをまとめて生成して返す"""
+    if _state["status"] == "running":
+        return jsonify({"error": "既に実行中です"}), 409
+
+    csv_text = None
+    if "csv_file" in request.files:
+        csv_text = request.files["csv_file"].read().decode("utf-8-sig")
+    elif request.form.get("csv_text"):
+        csv_text = request.form["csv_text"]
+    if not csv_text or not csv_text.strip():
+        return jsonify({"error": "CSVデータがありません"}), 400
+
+    companies = _parse_csv_text(csv_text)
+    if not companies:
+        return jsonify({"error": "CSVに行がありません"}), 400
+
+    limit = int(request.form.get("limit", "0"))
+
+    while not _state["log_queue"].empty():
+        _state["log_queue"].get_nowait()
+    _state["status"] = "running"
+    _state["preview"] = []
+    _state["result"] = None
+
+    def worker():
+        try:
+            cfg = load_config()
+            items = generate_preview(companies, cfg, limit=limit, log_callback=_log)
+            _state["preview"] = items
+            _state["status"] = "finished"
+            _log(f"[PREVIEW_DONE] {len(items)}")
+        except Exception as e:
+            _state["status"] = "error"
+            _log(f"[ERROR] {e}")
+
+    threading.Thread(target=worker, daemon=True).start()
+    return jsonify({"ok": True, "total": len(companies)})
+
+
+@app.route("/api/preview/data", methods=["GET"])
+@requires_auth
+def preview_data():
+    """生成済みプレビューデータを返す"""
+    return jsonify({"items": _state["preview"], "status": _state["status"]})
+
+
+@app.route("/api/send_preview", methods=["POST"])
+@requires_auth
+def api_send_preview():
+    """編集済みプレビューリストを受け取ってフォーム送信する"""
+    if _state["status"] == "running":
+        return jsonify({"error": "既に実行中です"}), 409
+
+    data = request.get_json()
+    items = data.get("items", [])
+    if not items:
+        return jsonify({"error": "送信アイテムがありません"}), 400
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_csv = str(BASE_DIR / f"results_{ts}.csv")
+    _state["output_csv"] = out_csv
+
+    while not _state["log_queue"].empty():
+        _state["log_queue"].get_nowait()
+    _state["status"] = "running"
+    _state["result"] = None
+
+    def worker():
+        try:
+            cfg = load_config()
+            result = send_preview(items, cfg, output_csv=out_csv, log_callback=_log)
+            _state["result"] = result
+            _state["status"] = "finished"
+            _log(f"[DONE] 送信={result['processed']} スキップ={result['skipped']} エラー={result['errors']}")
+        except Exception as e:
+            _state["status"] = "error"
+            _log(f"[ERROR] {e}")
+
+    threading.Thread(target=worker, daemon=True).start()
+    return jsonify({"ok": True, "total": len(items)})
+
+
 @app.route("/api/keys", methods=["GET"])
 @requires_auth
 def get_keys():
@@ -307,6 +397,7 @@ def reset():
         return jsonify({"error": "実行中はリセットできません"}), 409
     _state["status"] = "idle"
     _state["result"] = None
+    _state["preview"] = []
     while not _state["log_queue"].empty():
         _state["log_queue"].get_nowait()
     return jsonify({"ok": True})
