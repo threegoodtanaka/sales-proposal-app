@@ -255,27 +255,64 @@ def fill_and_submit_form(
     if dry_run:
         return {"success": True, "submitted": False, "detail": f"ドライラン: {filled_count}フィールドに入力完了（送信スキップ）"}
 
-    # 送信ボタン検索
-    submit_selectors = [
-        "input[type=submit]",
-        "button[type=submit]",
-        "button:has-text('送信')",
-        "button:has-text('確認')",
-        "button:has-text('送る')",
-        "button:has-text('Submit')",
-        "input[value='送信']",
-        "input[value='確認']",
+    # ── 送信ボタン検索（優先度順）────────────────────────────
+    SUBMIT_TEXT_KWS = [
+        "送信", "確認", "送る", "申込", "問い合わせる", "次へ", "進む",
+        "submit", "send", "confirm", "next", "apply", "go",
     ]
 
-    for sel in submit_selectors:
+    def _try_click(btn):
+        """ボタンをクリックしてページ遷移を待つ。成功したら True を返す。"""
         try:
-            btn = page.query_selector(sel)
-            if btn and btn.is_visible():
-                btn.click()
-                page.wait_for_load_state("networkidle", timeout=15000)
-                return {"success": True, "submitted": True, "detail": f"送信完了（{filled_count}フィールド入力）"}
+            if not btn or not btn.is_visible():
+                return False
+            btn.scroll_into_view_if_needed()
+            btn.click()
+            page.wait_for_load_state("networkidle", timeout=15000)
+            return True
+        except Exception:
+            return False
+
+    # 1) type=submit / button[type=submit]
+    for sel in ("input[type=submit]", "button[type=submit]", "[type=submit]"):
+        btn = page.query_selector(sel)
+        if _try_click(btn):
+            return {"success": True, "submitted": True, "detail": f"送信完了（{filled_count}フィールド入力）"}
+
+    # 2) input[type=image]（画像ボタン）
+    btn = page.query_selector("input[type=image]")
+    if _try_click(btn):
+        return {"success": True, "submitted": True, "detail": f"送信完了（画像ボタン）"}
+
+    # 3) ボタン・リンク系要素をテキストで探す
+    candidates = page.query_selector_all(
+        "button, input[type=button], input[type=submit], "
+        "a[role=button], [role=button], .btn, .button"
+    )
+    for el in candidates:
+        try:
+            text = " ".join(filter(None, [
+                el.inner_text(),
+                el.get_attribute("value"),
+                el.get_attribute("aria-label"),
+                el.get_attribute("title"),
+            ])).lower()
+            if any(kw in text for kw in SUBMIT_TEXT_KWS):
+                if _try_click(el):
+                    return {"success": True, "submitted": True, "detail": f"送信完了（テキスト一致: {text[:20]}）"}
         except Exception:
             continue
+
+    # 4) フォームの最後のボタンをフォールバックで試す
+    try:
+        forms = page.query_selector_all("form")
+        for form in forms:
+            btns = form.query_selector_all("button, input[type=button], input[type=submit]")
+            if btns:
+                if _try_click(btns[-1]):
+                    return {"success": True, "submitted": True, "detail": f"送信完了（フォーム末尾ボタン）"}
+    except Exception:
+        pass
 
     return {"success": False, "submitted": False, "detail": "送信ボタンが見つかりませんでした"}
 
