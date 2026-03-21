@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>問合せフォーム営業ツール</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2d3148;
+    --accent: #6c63ff; --accent2: #00d2ff; --green: #22c55e;
+    --yellow: #f59e0b; --red: #ef4444; --text: #e2e8f0; --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 1.1rem; font-weight: 700; }
+  header .badge { background: var(--accent); color: #fff; font-size: .7rem; padding: 2px 8px; border-radius: 99px; }
+
+  .layout { display: grid; grid-template-columns: 380px 1fr; gap: 0; height: calc(100vh - 53px); overflow: hidden; }
+
+  .panel { padding: 20px; overflow-y: auto; border-right: 1px solid var(--border); }
+  .panel h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 14px; }
+
+  .section { margin-bottom: 22px; }
+  label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 5px; }
+  input[type=text], input[type=email], input[type=number], textarea, select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 8px 10px; font-size: .87rem; outline: none;
+    transition: border-color .2s; }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .toggle-label { font-size: .87rem; }
+
+  /* Toggle switch */
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; background: var(--border); border-radius: 22px; cursor: pointer; transition: .2s; }
+  .slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: var(--accent); }
+  input:checked + .slider:before { transform: translateX(18px); }
+
+  /* Drop zone */
+  .dropzone { border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;
+    cursor: pointer; transition: border-color .2s; margin-bottom: 10px; }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); }
+  .dropzone .icon { font-size: 1.8rem; margin-bottom: 6px; }
+  .dropzone p { font-size: .82rem; color: var(--muted); }
+  .dropzone .filename { color: var(--green); font-size: .82rem; margin-top: 6px; }
+  #csv_text { height: 120px; font-size: .78rem; font-family: monospace; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px;
+    border-radius: 7px; border: none; cursor: pointer; font-size: .9rem; font-weight: 600; transition: opacity .15s; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; justify-content: center; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-green  { background: var(--green); color: #fff; }
+  .btn-red    { background: var(--red);   color: #fff; }
+
+  /* Right pane */
+  .main { display: flex; flex-direction: column; }
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+  .tab { padding: 12px 20px; font-size: .85rem; cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent; transition: color .2s; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .tab-content { flex: 1; overflow: hidden; display: none; }
+  .tab-content.active { display: flex; flex-direction: column; }
+
+  /* Log */
+  #log { flex: 1; overflow-y: auto; padding: 16px 20px; font-family: 'Courier New', monospace;
+    font-size: .8rem; line-height: 1.7; background: var(--bg); white-space: pre-wrap; word-break: break-all; }
+  .log-skip   { color: var(--yellow); }
+  .log-ok     { color: var(--green); }
+  .log-error  { color: var(--red); }
+  .log-info   { color: var(--accent2); }
+
+  /* Stats bar */
+  .stats-bar { display: flex; gap: 20px; padding: 10px 20px; background: var(--surface);
+    border-top: 1px solid var(--border); font-size: .82rem; }
+  .stat { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-green { background: var(--green); }
+  .dot-yellow { background: var(--yellow); }
+  .dot-red { background: var(--red); }
+  .dot-blue { background: var(--accent2); }
+
+  /* Status badge */
+  #status-badge { margin-left: auto; display: flex; align-items: center; gap: 6px;
+    font-size: .8rem; padding: 4px 12px; border-radius: 99px; }
+  #status-badge.idle     { background: #1e293b; color: var(--muted); }
+  #status-badge.running  { background: #1e3a8a; color: var(--accent2); }
+  #status-badge.finished { background: #14532d; color: var(--green); }
+  #status-badge.error    { background: #7f1d1d; color: var(--red); }
+
+  /* Config tab */
+  #tab-config { overflow-y: auto; padding: 20px; }
+  .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .save-row { margin-top: 16px; display: flex; gap: 10px; align-items: center; }
+  .save-msg { font-size: .8rem; color: var(--green); }
+
+  .spinner { width: 10px; height: 10px; border: 2px solid transparent;
+    border-top-color: currentColor; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>問合せフォーム営業ツール</h1>
+  <span class="badge">Powered by Claude</span>
+  <div id="status-badge" class="idle">待機中</div>
+</header>
+
+<div class="layout">
+
+  <!-- ===== 左パネル ===== -->
+  <div class="panel">
+    <div class="section">
+      <h2>CSVファイル</h2>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('csv_file').click()">
+        <div class="icon">📄</div>
+        <p>クリックまたはドラッグ＆ドロップ</p>
+        <p>（会社名, フォームURL, 業種, メモ 等の列）</p>
+        <div class="filename" id="filename"></div>
+      </div>
+      <input type="file" id="csv_file" accept=".csv" style="display:none">
+      <label>または CSV テキストを直接貼り付け</label>
+      <textarea id="csv_text" placeholder="会社名,フォームURL,業種,メモ&#10;株式会社〇〇,https://..."></textarea>
+    </div>
+
+    <div class="section">
+      <h2>実行設定</h2>
+      <div class="toggle-row">
+        <span class="toggle-label">ドライラン（送信しない）</span>
+        <label class="switch"><input type="checkbox" id="dry_run" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">件数制限</span>
+        <input type="number" id="limit" value="0" min="0" style="width:80px;text-align:right">
+      </div>
+      <div style="font-size:.75rem;color:var(--muted);margin-top:4px">※ 0 = 制限なし</div>
+    </div>
+
+    <div class="section">
+      <button class="btn btn-primary" id="btn-start" onclick="startRun()">
+        <span>▶</span> 実行開始
+      </button>
+      <div style="height:10px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="flex:1" onclick="resetRun()">リセット</button>
+        <button class="btn btn-green" style="flex:1" id="btn-dl" onclick="download()" disabled>結果CSV DL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 右パネル ===== -->
+  <div class="main">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('log', this)">実行ログ</div>
+      <div class="tab" onclick="switchTab('config', this)">設定（送信者・商材）</div>
+    </div>
+
+    <!-- ログタブ -->
+    <div class="tab-content active" id="tab-log">
+      <div id="log">待機中です。CSVを選択して「実行開始」を押してください。&#10;</div>
+      <div class="stats-bar">
+        <div class="stat"><span class="dot dot-green"></span>送信: <b id="cnt-sent">0</b></div>
+        <div class="stat"><span class="dot dot-yellow"></span>スキップ: <b id="cnt-skip">0</b></div>
+        <div class="stat"><span class="dot dot-red"></span>エラー: <b id="cnt-err">0</b></div>
+        <div class="stat"><span class="dot dot-blue"></span>ドライラン: <b id="cnt-dr">0</b></div>
+      </div>
+    </div>
+
+    <!-- 設定タブ -->
+    <div class="tab-content" id="tab-config">
+      <div id="tab-config-inner">
+
+        <!-- ── APIキー ── -->
+        <h2 style="margin-bottom:16px">APIキー</h2>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px">
+          <div style="margin-bottom:14px">
+            <label>使用するAIモデル</label>
+            <select id="cfg-provider" style="width:220px">
+              <option value="anthropic">Claude（Anthropic）</option>
+              <option value="openai">GPT-4o（OpenAI）</option>
+            </select>
+          </div>
+          <div class="config-grid" style="margin-bottom:14px">
+            <div>
+              <label>Anthropic APIキー</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="password" id="cfg-anthropic-key" placeholder="sk-ant-api03-...">
+                <span id="anthropic-status" style="font-size:.75rem;white-space:nowrap;color:var(--muted)"></span>
+              </div>
+            </div>
+            <div>
+              <label>OpenAI APIキー</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="password" id="cfg-openai-key" placeholder="sk-proj-...">
+                <span id="openai-status" style="font-size:.75rem;white-space:nowrap;color:var(--muted)"></span>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-bottom:12px">
+            ※ 入力したキーはサーバーローカルの <code>.keys.json</code> に保存されます。空欄のまま保存しても上書きされません。
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" style="width:auto" onclick="saveKeys()">APIキーを保存</button>
+            <span class="save-msg" id="key-save-msg"></span>
+          </div>
+        </div>
+
+        <!-- ── 送信者情報 ── -->
+        <h2 style="margin-bottom:16px">送信者情報</h2>
+        <div class="config-grid">
+          <div><label>会社名</label><input type="text" id="cfg-company"></div>
+          <div><label>部署名</label><input type="text" id="cfg-dept"></div>
+          <div><label>担当者名</label><input type="text" id="cfg-name"></div>
+          <div><label>メールアドレス</label><input type="email" id="cfg-email"></div>
+          <div><label>電話番号</label><input type="text" id="cfg-phone"></div>
+          <div><label>自社URL</label><input type="text" id="cfg-url"></div>
+        </div>
+
+        <!-- ── サービス情報 ── -->
+        <h2 style="margin:20px 0 16px">サービス情報</h2>
+        <div>
+          <label>サービス名</label>
+          <input type="text" id="cfg-svc-name" style="margin-bottom:10px">
+          <label>サービス概要（AI がメッセージ生成に使用）</label>
+          <textarea id="cfg-svc-summary" rows="5"></textarea>
+        </div>
+
+        <h2 style="margin:20px 0 16px">送信間隔（秒）</h2>
+        <input type="number" id="cfg-wait" style="width:100px" min="3">
+
+        <div class="save-row">
+          <button class="btn btn-primary" style="width:auto" onclick="saveConfig()">送信者・サービス設定を保存</button>
+          <span class="save-msg" id="save-msg"></span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .main -->
+</div><!-- .layout -->
+
+<script>
+// ── タブ切り替え ──────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── ファイル選択 ──────────────────────────────────────────
+const csvFileInput = document.getElementById('csv_file');
+const dropzone = document.getElementById('dropzone');
+let csvFileData = null;
+
+csvFileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  csvFileData = f;
+  document.getElementById('filename').textContent = '✓ ' + f.name;
+  document.getElementById('csv_text').value = '';
+});
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  csvFileData = f;
+  document.getElementById('filename').textContent = '✓ ' + f.name;
+  csvFileInput.files = e.dataTransfer.files;
+  document.getElementById('csv_text').value = '';
+});
+
+// ── ログ表示 ──────────────────────────────────────────────
+const logEl = document.getElementById('log');
+let cntSent = 0, cntSkip = 0, cntErr = 0, cntDr = 0;
+
+function appendLog(msg) {
+  const line = document.createElement('div');
+  line.textContent = msg;
+  if (msg.includes('スキップ'))  line.className = 'log-skip';
+  else if (msg.includes('[DONE]')) line.className = 'log-ok';
+  else if (msg.includes('エラー') || msg.includes('[ERROR]')) line.className = 'log-error';
+  else if (msg.includes('→ 送信済み') || msg.includes('→ ドライラン')) line.className = 'log-ok';
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+
+  // カウント更新
+  if (msg.includes('→ 送信済み')) { cntSent++; document.getElementById('cnt-sent').textContent = cntSent; }
+  if (msg.includes('→ スキップ')) { cntSkip++; document.getElementById('cnt-skip').textContent = cntSkip; }
+  if (msg.includes('→ エラー'))   { cntErr++;  document.getElementById('cnt-err').textContent  = cntErr; }
+  if (msg.includes('→ ドライラン')) { cntDr++;  document.getElementById('cnt-dr').textContent   = cntDr; }
+}
+
+// ── SSE ──────────────────────────────────────────────────
+let evtSource = null;
+
+function startSSE() {
+  if (evtSource) evtSource.close();
+  evtSource = new EventSource('/api/stream');
+  evtSource.onmessage = e => {
+    const msg = e.data;
+    if (msg === '[STREAM_END]') { evtSource.close(); evtSource = null; return; }
+    appendLog(msg);
+  };
+  evtSource.onerror = () => { evtSource.close(); evtSource = null; };
+}
+
+// ── 実行開始 ──────────────────────────────────────────────
+async function startRun() {
+  const csvText = document.getElementById('csv_text').value.trim();
+  if (!csvFileData && !csvText) {
+    alert('CSVファイルを選択するか、テキストを貼り付けてください'); return;
+  }
+
+  // カウントリセット
+  cntSent = cntSkip = cntErr = cntDr = 0;
+  ['cnt-sent','cnt-skip','cnt-err','cnt-dr'].forEach(id => document.getElementById(id).textContent = '0');
+  logEl.innerHTML = '';
+
+  const formData = new FormData();
+  if (csvFileData) formData.append('csv_file', csvFileData);
+  else             formData.append('csv_text', csvText);
+  formData.append('dry_run', document.getElementById('dry_run').checked ? 'true' : 'false');
+  formData.append('limit',   document.getElementById('limit').value);
+
+  setStatus('running');
+  document.getElementById('btn-start').disabled = true;
+
+  const res = await fetch('/api/start', { method: 'POST', body: formData });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'エラーが発生しました'); setStatus('idle'); document.getElementById('btn-start').disabled = false; return; }
+
+  appendLog(`実行開始 — 合計${data.total}社 / ${data.dry_run ? 'ドライラン' : '本番送信'}`);
+  startSSE();
+  pollStatus();
+}
+
+function pollStatus() {
+  const timer = setInterval(async () => {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    setStatus(data.status);
+    if (data.status !== 'running') {
+      clearInterval(timer);
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-dl').disabled = !data.has_output;
+    }
+  }, 2000);
+}
+
+// ── リセット ──────────────────────────────────────────────
+async function resetRun() {
+  if (!confirm('リセットしますか？')) return;
+  await fetch('/api/reset', { method: 'POST' });
+  logEl.textContent = '待機中です。\n';
+  setStatus('idle');
+  document.getElementById('btn-dl').disabled = true;
+  cntSent = cntSkip = cntErr = cntDr = 0;
+  ['cnt-sent','cnt-skip','cnt-err','cnt-dr'].forEach(id => document.getElementById(id).textContent = '0');
+}
+
+// ── ダウンロード ───────────────────────────────────────────
+function download() { window.location.href = '/api/download'; }
+
+// ── ステータス表示 ─────────────────────────────────────────
+const statusLabel = { idle:'待機中', running:'実行中', finished:'完了', error:'エラー' };
+function setStatus(s) {
+  const el = document.getElementById('status-badge');
+  el.className = s;
+  el.innerHTML = (s === 'running') ? `<span class="spinner"></span> ${statusLabel[s]}` : statusLabel[s] || s;
+}
+
+// ── APIキー読み込み・保存 ──────────────────────────────────
+async function loadKeys() {
+  const res = await fetch('/api/keys');
+  const d = await res.json();
+  const aEl = document.getElementById('anthropic-status');
+  const oEl = document.getElementById('openai-status');
+  aEl.textContent = d.anthropic.is_set ? '✓ ' + d.anthropic.masked : '未設定';
+  aEl.style.color = d.anthropic.is_set ? 'var(--green)' : 'var(--muted)';
+  oEl.textContent = d.openai.is_set    ? '✓ ' + d.openai.masked    : '未設定';
+  oEl.style.color = d.openai.is_set    ? 'var(--green)' : 'var(--muted)';
+}
+
+async function saveKeys() {
+  const body = {
+    anthropic_api_key: document.getElementById('cfg-anthropic-key').value.trim(),
+    openai_api_key:    document.getElementById('cfg-openai-key').value.trim(),
+  };
+  if (!body.anthropic_api_key && !body.openai_api_key) {
+    alert('少なくとも1つのAPIキーを入力してください'); return;
+  }
+  const res = await fetch('/api/keys', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const d = await res.json();
+  const msg = document.getElementById('key-save-msg');
+  if (res.ok) {
+    msg.textContent = '保存しました ✓'; msg.style.color = 'var(--green)';
+    setTimeout(() => msg.textContent = '', 3000);
+    // 入力フィールドをクリア（セキュリティ）
+    document.getElementById('cfg-anthropic-key').value = '';
+    document.getElementById('cfg-openai-key').value = '';
+    loadKeys();
+  } else {
+    msg.textContent = d.error || 'エラー'; msg.style.color = 'var(--red)';
+  }
+}
+
+// ── 設定読み込み ───────────────────────────────────────────
+async function loadConfig() {
+  const res = await fetch('/api/config');
+  const d = await res.json();
+  document.getElementById('cfg-provider').value    = d.settings.ai_provider  || 'anthropic';
+  document.getElementById('cfg-company').value     = d.sender.company_name   || '';
+  document.getElementById('cfg-dept').value        = d.sender.department     || '';
+  document.getElementById('cfg-name').value        = d.sender.name           || '';
+  document.getElementById('cfg-email').value       = d.sender.email          || '';
+  document.getElementById('cfg-phone').value       = d.sender.phone          || '';
+  document.getElementById('cfg-url').value         = d.sender.url            || '';
+  document.getElementById('cfg-svc-name').value    = d.service.name          || '';
+  document.getElementById('cfg-svc-summary').value = d.service.summary       || '';
+  document.getElementById('cfg-wait').value        = d.settings.wait_between_seconds || 10;
+}
+
+async function saveConfig() {
+  const body = {
+    sender: {
+      company_name: document.getElementById('cfg-company').value,
+      department:   document.getElementById('cfg-dept').value,
+      name:         document.getElementById('cfg-name').value,
+      email:        document.getElementById('cfg-email').value,
+      phone:        document.getElementById('cfg-phone').value,
+      url:          document.getElementById('cfg-url').value,
+    },
+    service: {
+      name:    document.getElementById('cfg-svc-name').value,
+      summary: document.getElementById('cfg-svc-summary').value,
+    },
+    settings: {
+      ai_provider:          document.getElementById('cfg-provider').value,
+      wait_between_seconds: parseInt(document.getElementById('cfg-wait').value),
+    }
+  };
+  const res = await fetch('/api/config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const msg = document.getElementById('save-msg');
+  if (res.ok) { msg.textContent = '保存しました ✓'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 3000); }
+  else        { msg.textContent = 'エラーが発生しました'; msg.style.color = 'var(--red)'; }
+}
+
+// 初期化
+loadConfig();
+loadKeys();
+</script>
+</body>
+</html>

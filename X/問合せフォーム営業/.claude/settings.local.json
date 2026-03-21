@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from web_app import app; print\\(''OK''\\)\")",
+      "Bash(curl -s -u admin:changeme http://localhost:5000/)",
+      "Bash(curl -s -u admin:changeme http://localhost:5000/api/status)",
+      "Bash(python -m json.tool)",
+      "Bash(taskkill /PID 8896 /F)",
+      "Bash(reg query:*)",
+      "Bash(python -c \"from web_app import app, load_keys; print\\(''import OK''\\)\")",
+      "Bash(curl -s -u admin:changeme http://localhost:5000/api/keys)",
+      "Bash(tasklist)",
+      "Bash(taskkill /IM python3.13.exe /F)",
+      "Bash(curl -v -u admin:changeme http://localhost:5000/api/keys)",
+      "Bash(python -c \":*)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -u admin:changeme http://localhost:5001/api/keys)"
+    ]
+  }
+}
