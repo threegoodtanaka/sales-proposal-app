@@ -68,9 +68,29 @@ def mask_key(key: str) -> str:
 # 起動時にキーをロード
 load_keys()
 
+def _normalize_row(row: dict) -> dict:
+    """列名のゆらぎを正規化する（フォームURL / 会社名 など）"""
+    URL_ALIASES    = {"フォームurl", "url", "form_url", "formurl", "お問い合わせurl",
+                      "問合せurl", "サイトurl", "ホームページurl", "website", "hp",
+                      "フォームuri", "contacturl", "contact_url"}
+    COMPANY_ALIASES = {"company", "company_name", "企業名", "店名", "施設名",
+                       "法人名", "屋号", "ブランド名（会社名）"}
+
+    normalized = {}
+    for k, v in row.items():
+        key_lower = (k or "").strip().lower().replace(" ", "").replace("　", "")
+        if key_lower in URL_ALIASES and "フォームURL" not in normalized:
+            normalized["フォームURL"] = (v or "").strip()
+        elif key_lower in COMPANY_ALIASES and "会社名" not in normalized:
+            normalized["会社名"] = (v or "").strip()
+        else:
+            normalized[k.strip()] = v
+    return normalized
+
+
 def _parse_csv_text(csv_text: str) -> list[dict]:
     reader = csv.DictReader(io.StringIO(csv_text))
-    return list(reader)
+    return [_normalize_row(row) for row in reader]
 
 # ── アプリ初期化 ─────────────────────────────────────────────
 app = Flask(__name__)
