@@ -301,6 +301,82 @@ def load_results_csv(csv_path: str) -> set[str]:
     return done
 
 
+# ══════════════════════════════════════════════════════════════
+# STEP2: 警告チェック（フォームURLにアクセスして確認）
+# ══════════════════════════════════════════════════════════════
+def check_form_warnings(companies: list[dict], cfg: dict, log_callback=None) -> list[dict]:
+    """
+    各企業のフォームURLにPlaywrightでアクセスし、警告キーワードの有無を確認する。
+    Returns: [{"idx", "会社名", "フォームURL", "status", "warning_keyword", "page_title"}, ...]
+      status: "ok" / "warning" / "error" / "no_url"
+    """
+    def log(msg):
+        print(msg)
+        if log_callback:
+            log_callback(msg)
+
+    skip_kws = cfg["skip_keywords"]
+    timeout  = cfg["settings"].get("page_load_timeout", 30) * 1000
+    results  = []
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox",
+                  "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
+        )
+
+        for i, company in enumerate(companies):
+            company_name = company.get("会社名", f"企業{i+1}").strip()
+            form_url     = company.get("フォームURL", "").strip()
+            log(f"[{i+1}/{len(companies)}] {company_name} — チェック中...")
+
+            if not form_url:
+                log("  → URLなし（スキップ）")
+                results.append({"idx": i, "会社名": company_name, "フォームURL": "",
+                                 "status": "no_url", "warning_keyword": "", "page_title": ""})
+                continue
+
+            context = browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                locale="ja-JP", timezone_id="Asia/Tokyo",
+            )
+            page = context.new_page()
+
+            try:
+                page.goto(form_url, timeout=timeout, wait_until="domcontentloaded")
+                page.wait_for_load_state("networkidle", timeout=min(timeout, 15000))
+                page_text  = page.inner_text("body")
+                page_title = page.title()
+            except Exception as e:
+                log(f"  → エラー: {str(e)[:80]}")
+                results.append({"idx": i, "会社名": company_name, "フォームURL": form_url,
+                                 "status": "error", "warning_keyword": str(e)[:120], "page_title": ""})
+                context.close()
+                continue
+
+            matched_kw = detect_warning(page_text, skip_kws)
+            if matched_kw:
+                log(f"  ⚠ 警告検出: 「{matched_kw}」")
+                results.append({"idx": i, "会社名": company_name, "フォームURL": form_url,
+                                 "status": "warning", "warning_keyword": matched_kw, "page_title": page_title})
+            else:
+                log(f"  ✓ 問題なし（{page_title[:30]}）")
+                results.append({"idx": i, "会社名": company_name, "フォームURL": form_url,
+                                 "status": "ok", "warning_keyword": "", "page_title": page_title})
+
+            context.close()
+
+        browser.close()
+
+    ok  = sum(1 for r in results if r["status"] == "ok")
+    warn = sum(1 for r in results if r["status"] == "warning")
+    err  = sum(1 for r in results if r["status"] == "error")
+    log(f"\n警告チェック完了: ✓OK={ok} / ⚠警告={warn} / エラー={err} / URLなし={len(results)-ok-warn-err}")
+    return results
+
+
 def append_result(csv_path: str, row: dict):
     file_exists = Path(csv_path).exists()
     fieldnames = [

@@ -25,7 +25,9 @@ import yaml
 from flask import (Flask, render_template, request, jsonify,
                    Response, send_file, stream_with_context)
 
-from form_bot import load_config, load_input_csv, run_bot, generate_preview, send_preview, BASE_DIR, CONFIG_FILE
+from form_bot import (load_config, load_input_csv, run_bot,
+                      check_form_warnings, generate_preview, send_preview,
+                      BASE_DIR, CONFIG_FILE)
 
 # ── APIキー永続化ファイル（gitignore対象）───────────────────
 KEYS_FILE = BASE_DIR / ".keys.json"
@@ -95,12 +97,14 @@ def requires_auth(f):
 
 # ── グローバル状態 ───────────────────────────────────────────
 _state = {
-    "status": "idle",       # idle / running / finished / error
+    "status": "idle",        # idle / running / finished / error
     "log_queue": queue.Queue(),
-    "result": None,
+    "companies": [],         # STEP1: CSV から読み込んだ企業リスト
+    "check_results": [],     # STEP2: 警告チェック結果
+    "preview": [],           # STEP3: メッセージ生成結果
+    "result": None,          # STEP4: 送信結果
     "output_csv": None,
     "thread": None,
-    "preview": [],          # generate_preview() の結果を保持
 }
 
 def _log(msg: str):
@@ -269,13 +273,10 @@ def download():
     )
 
 
-@app.route("/api/preview", methods=["POST"])
+@app.route("/api/companies", methods=["POST"])
 @requires_auth
-def preview():
-    """CSV を受け取り、Playwrightなしでメッセージをまとめて生成して返す"""
-    if _state["status"] == "running":
-        return jsonify({"error": "既に実行中です"}), 409
-
+def api_companies():
+    """STEP1: CSV を解析して企業リストを返す（Playwright不要）"""
     csv_text = None
     if "csv_file" in request.files:
         csv_text = request.files["csv_file"].read().decode("utf-8-sig")
@@ -288,7 +289,82 @@ def preview():
     if not companies:
         return jsonify({"error": "CSVに行がありません"}), 400
 
-    limit = int(request.form.get("limit", "0"))
+    # idx を付与して保存
+    for i, c in enumerate(companies):
+        c["idx"] = i
+    _state["companies"]     = companies
+    _state["check_results"] = []
+    _state["preview"]       = []
+    _state["result"]        = None
+    return jsonify({"ok": True, "total": len(companies), "companies": companies})
+
+
+@app.route("/api/check", methods=["POST"])
+@requires_auth
+def api_check():
+    """STEP2: 各企業のフォームURLにアクセスして警告キーワードを確認する"""
+    if _state["status"] == "running":
+        return jsonify({"error": "既に実行中です"}), 409
+    if not _state["companies"]:
+        return jsonify({"error": "先にCSVを読み込んでください"}), 400
+
+    # フロントエンドで include=false にされた行を除外せず全件チェックする
+    companies = _state["companies"]
+
+    while not _state["log_queue"].empty():
+        _state["log_queue"].get_nowait()
+    _state["status"]        = "running"
+    _state["check_results"] = []
+
+    def worker():
+        try:
+            cfg     = load_config()
+            results = check_form_warnings(companies, cfg, log_callback=_log)
+            _state["check_results"] = results
+            _state["status"]        = "finished"
+            _log(f"[CHECK_DONE] {len(results)}")
+        except Exception as e:
+            _state["status"] = "error"
+            _log(f"[ERROR] {e}")
+
+    threading.Thread(target=worker, daemon=True).start()
+    return jsonify({"ok": True, "total": len(companies)})
+
+
+@app.route("/api/check/data", methods=["GET"])
+@requires_auth
+def api_check_data():
+    """STEP2 の結果を返す"""
+    return jsonify({"items": _state["check_results"], "status": _state["status"]})
+
+
+@app.route("/api/preview", methods=["POST"])
+@requires_auth
+def preview():
+    """STEP3: 警告チェック済みリストに対してメッセージを生成する"""
+    if _state["status"] == "running":
+        return jsonify({"error": "既に実行中です"}), 409
+
+    # フロントエンドから include フラグ付きのリストを受け取る
+    data = request.get_json(silent=True) or {}
+    included_idxs = set(data.get("included_idxs", []))  # チェックONの idx セット
+
+    # include されている企業だけ抽出（check_results から）
+    check_results = _state.get("check_results", [])
+    if check_results:
+        companies = [
+            _state["companies"][r["idx"]]
+            for r in check_results
+            if r["idx"] in included_idxs
+        ]
+    else:
+        # STEP2 スキップ時はSTEP1の全企業（idx フィルタ）
+        companies = [c for c in _state["companies"] if c.get("idx") in included_idxs]
+
+    if not companies:
+        return jsonify({"error": "対象企業がありません"}), 400
+
+    limit = 0
 
     while not _state["log_queue"].empty():
         _state["log_queue"].get_nowait()
@@ -395,9 +471,12 @@ def post_keys():
 def reset():
     if _state["status"] == "running":
         return jsonify({"error": "実行中はリセットできません"}), 409
-    _state["status"] = "idle"
-    _state["result"] = None
-    _state["preview"] = []
+    _state["status"]        = "idle"
+    _state["companies"]     = []
+    _state["check_results"] = []
+    _state["preview"]       = []
+    _state["result"]        = None
+    _state["output_csv"]    = None
     while not _state["log_queue"].empty():
         _state["log_queue"].get_nowait()
     return jsonify({"ok": True})

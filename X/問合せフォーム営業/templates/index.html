@@ -5,272 +5,346 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>問合せフォーム営業ツール</title>
 <style>
-  :root {
-    --bg: #0f1117; --surface: #1a1d27; --border: #2d3148;
-    --accent: #6c63ff; --accent2: #00d2ff; --green: #22c55e;
-    --yellow: #f59e0b; --red: #ef4444; --text: #e2e8f0; --muted: #94a3b8;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --border:#2d3148;
+  --accent:#6c63ff; --accent2:#00d2ff; --green:#22c55e;
+  --yellow:#f59e0b; --red:#ef4444; --text:#e2e8f0; --muted:#94a3b8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--accent2);text-decoration:none}
+a:hover{text-decoration:underline}
 
-  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px;
-    display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 1.1rem; font-weight: 700; }
-  header .badge { background: var(--accent); color: #fff; font-size: .7rem; padding: 2px 8px; border-radius: 99px; }
+/* ── ヘッダー ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;
+  display:flex;align-items:center;gap:12px;flex-shrink:0}
+header h1{font-size:1rem;font-weight:700}
+.badge{background:var(--accent);color:#fff;font-size:.7rem;padding:2px 8px;border-radius:99px}
+#status-badge{margin-left:auto;display:flex;align-items:center;gap:6px;
+  font-size:.78rem;padding:4px 12px;border-radius:99px}
+#status-badge.idle    {background:#1e293b;color:var(--muted)}
+#status-badge.running {background:#1e3a8a;color:var(--accent2)}
+#status-badge.finished{background:#14532d;color:var(--green)}
+#status-badge.error   {background:#7f1d1d;color:var(--red)}
 
-  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; height: calc(100vh - 53px); overflow: hidden; }
-  .panel { padding: 20px; overflow-y: auto; border-right: 1px solid var(--border); }
-  .panel h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; }
-  .section { margin-bottom: 20px; }
+/* ── ステップバー ── */
+.stepbar{display:flex;background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;flex-shrink:0;gap:0}
+.step{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:.82rem;
+  color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+.step .num{width:22px;height:22px;border-radius:50%;background:var(--border);
+  color:var(--muted);font-size:.75rem;display:flex;align-items:center;justify-content:center;font-weight:700}
+.step.active{color:var(--text);border-bottom-color:var(--accent)}
+.step.active .num{background:var(--accent);color:#fff}
+.step.done{color:var(--green)}
+.step.done .num{background:var(--green);color:#fff}
 
-  label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 5px; }
-  input[type=text], input[type=email], input[type=number], textarea, select {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    border-radius: 6px; padding: 8px 10px; font-size: .87rem; outline: none; transition: border-color .2s; }
-  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
-  textarea { resize: vertical; }
+/* ── 2カラムレイアウト ── */
+.layout{display:grid;grid-template-columns:300px 1fr;flex:1;overflow:hidden}
+.panel{padding:18px;overflow-y:auto;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:16px}
+.panel h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
 
-  .toggle-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .toggle-label { font-size: .87rem; }
-  .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; background: var(--border); border-radius: 22px; cursor: pointer; transition: .2s; }
-  .slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px;
-    background: #fff; border-radius: 50%; transition: .2s; }
-  input:checked + .slider { background: var(--accent); }
-  input:checked + .slider:before { transform: translateX(18px); }
+label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+input[type=text],input[type=email],input[type=number],input[type=password],textarea,select{
+  width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:6px;padding:7px 10px;font-size:.85rem;outline:none;transition:border-color .2s}
+input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+textarea{resize:vertical}
 
-  .dropzone { border: 2px dashed var(--border); border-radius: 8px; padding: 16px; text-align: center;
-    cursor: pointer; transition: border-color .2s; margin-bottom: 10px; }
-  .dropzone:hover, .dropzone.drag { border-color: var(--accent); }
-  .dropzone .icon { font-size: 1.6rem; margin-bottom: 4px; }
-  .dropzone p { font-size: .8rem; color: var(--muted); }
-  .dropzone .filename { color: var(--green); font-size: .8rem; margin-top: 4px; }
-  #csv_text { height: 90px; font-size: .78rem; font-family: monospace; }
+.dropzone{border:2px dashed var(--border);border-radius:8px;padding:14px;text-align:center;
+  cursor:pointer;transition:border-color .2s}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent)}
+.dropzone .icon{font-size:1.4rem;margin-bottom:4px}
+.dropzone p{font-size:.78rem;color:var(--muted)}
+.dropzone .filename{color:var(--green);font-size:.78rem;margin-top:4px}
+#csv_text{height:80px;font-size:.75rem;font-family:monospace;margin-top:6px}
 
-  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px;
-    border-radius: 7px; border: none; cursor: pointer; font-size: .88rem; font-weight: 600; transition: opacity .15s; }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
-  .btn-primary { background: var(--accent); color: #fff; width: 100%; justify-content: center; }
-  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
-  .btn-green  { background: var(--green); color: #fff; }
-  .btn-red    { background: var(--red);   color: #fff; }
-  .btn-sm { padding: 5px 12px; font-size: .8rem; }
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;
+  border-radius:7px;border:none;cursor:pointer;font-size:.85rem;font-weight:600;transition:opacity .15s;width:100%}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-blue   {background:#2563eb;color:#fff}
+.btn-green  {background:var(--green);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-sm{padding:4px 10px;font-size:.75rem;width:auto}
 
-  .main { display: flex; flex-direction: column; overflow: hidden; }
-  .tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .tab { padding: 12px 20px; font-size: .85rem; cursor: pointer; color: var(--muted);
-    border-bottom: 2px solid transparent; transition: color .2s; white-space: nowrap; }
-  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.divider{border:none;border-top:1px solid var(--border)}
 
-  .tab-content { flex: 1; overflow: hidden; display: none; flex-direction: column; }
-  .tab-content.active { display: flex; }
+/* ── メインコンテンツ ── */
+.main{display:flex;flex-direction:column;overflow:hidden}
+.step-content{flex:1;overflow:hidden;display:none;flex-direction:column}
+.step-content.active{display:flex}
 
-  /* ── ログタブ ── */
-  #log { flex: 1; overflow-y: auto; padding: 16px 20px; font-family: 'Courier New', monospace;
-    font-size: .8rem; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
-  .log-skip  { color: var(--yellow); }
-  .log-ok    { color: var(--green); }
-  .log-error { color: var(--red); }
+/* ── テーブル共通 ── */
+.tbl-wrap{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+thead th{background:var(--surface);padding:9px 12px;text-align:left;font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:var(--surface)}
+tbody td{padding:9px 12px;vertical-align:middle}
+td.company{font-weight:600;max-width:140px;word-break:break-all;font-size:.83rem}
+td.url{max-width:160px;word-break:break-all;font-size:.75rem}
+td.center{text-align:center}
 
-  .stats-bar { display: flex; gap: 20px; padding: 10px 20px; background: var(--surface);
-    border-top: 1px solid var(--border); font-size: .82rem; flex-shrink: 0; }
-  .stat { display: flex; align-items: center; gap: 6px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .dot-green  { background: var(--green); }
-  .dot-yellow { background: var(--yellow); }
-  .dot-red    { background: var(--red); }
-  .dot-blue   { background: var(--accent2); }
+/* ── ステータスタグ ── */
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:600;white-space:nowrap}
+.tag-ok     {background:#14532d;color:var(--green)}
+.tag-warning{background:#422006;color:var(--yellow)}
+.tag-error  {background:#450a0a;color:var(--red)}
+.tag-nurl   {background:#1e293b;color:var(--muted)}
+.tag-skip   {background:#1e293b;color:var(--muted)}
 
-  /* ── プレビュータブ ── */
-  #tab-preview { overflow: hidden; }
-  .preview-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px;
-    background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
-  .preview-toolbar .sel-info { font-size: .82rem; color: var(--muted); margin-left: auto; }
+/* ── メッセージプレビュー ── */
+.msg-subject{font-weight:600;margin-bottom:2px;font-size:.83rem}
+.msg-body{color:var(--muted);font-size:.75rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
-  .preview-table-wrap { flex: 1; overflow: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-  thead th { background: var(--surface); padding: 10px 12px; text-align: left; font-size: .75rem;
-    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-    border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
-  tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
-  tbody tr:hover { background: var(--surface); }
-  tbody tr.skipped { opacity: .45; }
-  tbody td { padding: 10px 12px; vertical-align: top; }
-  td.company { font-weight: 600; max-width: 140px; word-break: break-all; }
-  td.appeal { color: var(--accent2); font-size: .75rem; white-space: nowrap; }
-  td.msg { max-width: 260px; }
-  td.msg .subject { font-weight: 600; margin-bottom: 3px; }
-  td.msg .body-preview { color: var(--muted); font-size: .78rem; display: -webkit-box;
-    -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  td.actions { white-space: nowrap; }
+/* ── ログ ── */
+#log{flex:1;overflow-y:auto;padding:14px 20px;font-family:'Courier New',monospace;
+  font-size:.78rem;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.log-ok   {color:var(--green)}
+.log-warn {color:var(--yellow)}
+.log-err  {color:var(--red)}
+.log-info {color:var(--accent2)}
 
-  /* ── モーダル（本文編集） ── */
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100;
-    align-items: center; justify-content: center; }
-  .modal-overlay.open { display: flex; }
-  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    width: 640px; max-width: 95vw; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
-  .modal h3 { font-size: 1rem; }
-  .modal label { font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
-  .modal input, .modal textarea { width: 100%; background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: .87rem; outline: none; }
-  .modal textarea { height: 160px; resize: vertical; }
-  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; }
+.stats-bar{display:flex;gap:16px;padding:8px 20px;background:var(--surface);
+  border-top:1px solid var(--border);font-size:.8rem;flex-shrink:0}
+.stat{display:flex;align-items:center;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%}
+.dot-green {background:var(--green)}
+.dot-yellow{background:var(--yellow)}
+.dot-red   {background:var(--red)}
 
-  /* ── 設定タブ ── */
-  #tab-config { overflow-y: auto; padding: 20px; }
-  .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .save-row { margin-top: 16px; display: flex; gap: 10px; align-items: center; }
-  .save-msg { font-size: .8rem; }
+/* ── モーダル ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  width:660px;max-width:95vw;padding:22px;display:flex;flex-direction:column;gap:14px}
+.modal h3{font-size:.95rem}
+.modal textarea{height:150px;font-size:.85rem}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end}
 
-  /* ── 共通 ── */
-  #status-badge { margin-left: auto; display: flex; align-items: center; gap: 6px;
-    font-size: .8rem; padding: 4px 12px; border-radius: 99px; }
-  #status-badge.idle     { background: #1e293b; color: var(--muted); }
-  #status-badge.running  { background: #1e3a8a; color: var(--accent2); }
-  #status-badge.finished { background: #14532d; color: var(--green); }
-  #status-badge.error    { background: #7f1d1d; color: var(--red); }
+/* ── 設定タブ ── */
+.settings-body{flex:1;overflow-y:auto;padding:20px}
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.save-row{margin-top:14px;display:flex;gap:10px;align-items:center}
+.save-msg{font-size:.78rem}
 
-  .spinner { width: 10px; height: 10px; border: 2px solid transparent;
-    border-top-color: currentColor; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .tag { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
-  .tag-skip { background: #422006; color: var(--yellow); }
-  .tag-ok   { background: #14532d; color: var(--green); }
+.spinner{width:10px;height:10px;border:2px solid transparent;
+  border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 空状態 ── */
+.empty{padding:60px 20px;text-align:center;color:var(--muted);font-size:.85rem}
 </style>
 </head>
 <body>
 
+<!-- ヘッダー -->
 <header>
   <h1>問合せフォーム営業ツール</h1>
-  <span class="badge">Powered by Claude / GPT-4o</span>
+  <span class="badge">Claude / GPT-4o</span>
   <div id="status-badge" class="idle">待機中</div>
 </header>
+
+<!-- ステップバー -->
+<div class="stepbar">
+  <div class="step active" id="s1" onclick="showStep(1)">
+    <span class="num">1</span> リスト読み込み
+  </div>
+  <div class="step" id="s2" onclick="showStep(2)">
+    <span class="num">2</span> 警告チェック
+  </div>
+  <div class="step" id="s3" onclick="showStep(3)">
+    <span class="num">3</span> 送信内容確認
+  </div>
+  <div class="step" id="s4" onclick="showStep(4)">
+    <span class="num">4</span> 送信実行
+  </div>
+  <div class="step" id="s5" onclick="showStep(5)" style="margin-left:auto">
+    <span class="num">⚙</span> 設定
+  </div>
+</div>
 
 <div class="layout">
 
   <!-- ===== 左パネル ===== -->
   <div class="panel">
-    <div class="section">
-      <h2>CSVファイル</h2>
+
+    <!-- STEP 1 -->
+    <div id="panel1">
+      <h2>① CSVファイル</h2>
       <div class="dropzone" id="dropzone" onclick="document.getElementById('csv_file').click()">
         <div class="icon">📄</div>
         <p>クリックまたはドラッグ＆ドロップ</p>
         <div class="filename" id="filename"></div>
       </div>
       <input type="file" id="csv_file" accept=".csv" style="display:none">
-      <label>または CSV テキストを直接貼り付け</label>
       <textarea id="csv_text" placeholder="会社名,フォームURL,業種,メモ&#10;株式会社〇〇,https://..."></textarea>
+      <button class="btn btn-primary" id="btn-load" onclick="loadCompanies()">リストを読み込む</button>
     </div>
 
-    <div class="section">
-      <h2>件数制限</h2>
-      <div class="toggle-row">
-        <span class="toggle-label">上限件数（0=制限なし）</span>
-        <input type="number" id="limit" value="0" min="0" style="width:70px;text-align:right">
+    <hr class="divider">
+
+    <!-- STEP 2 -->
+    <div id="panel2">
+      <h2>② 警告チェック</h2>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">
+        各企業のフォームURLにアクセスして「営業お断り」等の注意書きを確認します
       </div>
+      <button class="btn btn-blue" id="btn-check" onclick="startCheck()" disabled>
+        フォームURLをチェックする
+      </button>
     </div>
 
-    <div class="section">
-      <!-- STEP1: プレビュー生成 -->
-      <button class="btn btn-primary" id="btn-preview" onclick="startPreview()" style="margin-bottom:10px">
-        <span>✦</span> STEP1: メッセージ生成
-      </button>
-      <!-- STEP2: 選択して送信（プレビュータブで選択後） -->
-      <button class="btn btn-green" id="btn-send" onclick="sendSelected()" disabled style="margin-bottom:10px">
-        <span>▶</span> STEP2: 選択件を送信
-      </button>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline" style="flex:1" onclick="resetAll()">リセット</button>
-        <button class="btn btn-outline" style="flex:1" id="btn-dl" onclick="download()" disabled>結果CSV DL</button>
+    <hr class="divider">
+
+    <!-- STEP 3 -->
+    <div id="panel3">
+      <h2>③ 送信内容生成</h2>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">
+        チェック済みリストで送信OKの企業に対して、AIがメッセージを生成します
       </div>
+      <button class="btn btn-primary" id="btn-generate" onclick="startGenerate()" disabled>
+        メッセージを生成する
+      </button>
     </div>
+
+    <hr class="divider">
+
+    <!-- STEP 4 -->
+    <div id="panel4">
+      <h2>④ 送信</h2>
+      <div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">
+        送信内容を確認してチェックを入れた企業に順次送信します
+      </div>
+      <button class="btn btn-green" id="btn-send" onclick="sendSelected()" disabled>
+        選択件を送信する
+      </button>
+      <div style="height:8px"></div>
+      <button class="btn btn-outline btn-sm" id="btn-dl" onclick="download()" disabled style="width:100%">
+        結果CSV ダウンロード
+      </button>
+    </div>
+
+    <hr class="divider">
+    <button class="btn btn-outline" onclick="resetAll()" style="font-size:.78rem">リセット</button>
   </div>
 
-  <!-- ===== 右パネル ===== -->
+  <!-- ===== メインエリア ===== -->
   <div class="main">
-    <div class="tabs">
-      <div class="tab active" onclick="switchTab('preview', this)">プレビュー一覧</div>
-      <div class="tab" onclick="switchTab('log', this)">実行ログ</div>
-      <div class="tab" onclick="switchTab('config', this)">設定</div>
-    </div>
 
-    <!-- ── プレビュータブ ── -->
-    <div class="tab-content active" id="tab-preview">
-      <div class="preview-toolbar">
-        <button class="btn btn-outline btn-sm" onclick="selectAll(true)">全選択</button>
-        <button class="btn btn-outline btn-sm" onclick="selectAll(false)">全解除</button>
-        <span class="sel-info" id="sel-info">0件選択中</span>
-      </div>
-      <div class="preview-table-wrap">
-        <table id="preview-table">
-          <thead>
-            <tr>
-              <th style="width:36px"></th>
-              <th>会社名</th>
-              <th>訴求</th>
-              <th>件名 / 本文（クリックで編集）</th>
-              <th>状態</th>
-            </tr>
-          </thead>
-          <tbody id="preview-body">
-            <tr><td colspan="5" style="padding:40px;text-align:center;color:var(--muted)">
-              CSVを読み込んで「STEP1: メッセージ生成」を押してください
-            </td></tr>
+    <!-- ──────── STEP1: リスト一覧 ──────── -->
+    <div class="step-content active" id="view1">
+      <div class="tbl-wrap">
+        <table id="tbl1">
+          <thead><tr>
+            <th style="width:36px"></th>
+            <th>会社名</th>
+            <th>フォームURL</th>
+            <th>業種</th>
+            <th>メモ</th>
+          </tr></thead>
+          <tbody id="body1">
+            <tr><td colspan="5" class="empty">CSVを選択して「リストを読み込む」を押してください</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- ── ログタブ ── -->
-    <div class="tab-content" id="tab-log">
-      <div id="log">待機中です。&#10;</div>
+    <!-- ──────── STEP2: 警告チェック結果 ──────── -->
+    <div class="step-content" id="view2">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:36px"></th>
+            <th>会社名</th>
+            <th>フォームURL</th>
+            <th>ページタイトル</th>
+            <th>チェック結果</th>
+            <th>検出キーワード</th>
+          </tr></thead>
+          <tbody id="body2">
+            <tr><td colspan="6" class="empty">「フォームURLをチェックする」を押してください</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="stats-bar" id="check-stats" style="display:none">
+        <div class="stat"><span class="dot dot-green"></span>OK: <b id="cnt-ok">0</b></div>
+        <div class="stat"><span class="dot dot-yellow"></span>警告: <b id="cnt-warn">0</b></div>
+        <div class="stat"><span class="dot dot-red"></span>エラー: <b id="cnt-err2">0</b></div>
+        <span style="margin-left:auto;font-size:.78rem;color:var(--muted)">※ チェックを外した企業はSTEP3でスキップされます</span>
+      </div>
+    </div>
+
+    <!-- ──────── STEP3: 送信内容確認 ──────── -->
+    <div class="step-content" id="view3">
+      <div style="padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);
+        display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="previewSelectAll(true)">全選択</button>
+        <button class="btn btn-outline btn-sm" onclick="previewSelectAll(false)">全解除</button>
+        <span id="preview-sel-info" style="font-size:.78rem;color:var(--muted);margin-left:auto"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th style="width:36px"></th>
+            <th>会社名</th>
+            <th>訴求</th>
+            <th style="min-width:300px">件名 / 本文（クリックで編集）</th>
+          </tr></thead>
+          <tbody id="body3">
+            <tr><td colspan="4" class="empty">「メッセージを生成する」を押してください</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ──────── STEP4: 送信ログ ──────── -->
+    <div class="step-content" id="view4">
+      <div id="log">送信ログがここに表示されます。&#10;</div>
       <div class="stats-bar">
-        <div class="stat"><span class="dot dot-green"></span>送信: <b id="cnt-sent">0</b></div>
+        <div class="stat"><span class="dot dot-green"></span>送信済み: <b id="cnt-sent">0</b></div>
         <div class="stat"><span class="dot dot-yellow"></span>スキップ: <b id="cnt-skip">0</b></div>
         <div class="stat"><span class="dot dot-red"></span>エラー: <b id="cnt-err">0</b></div>
       </div>
     </div>
 
-    <!-- ── 設定タブ ── -->
-    <div class="tab-content" id="tab-config">
-      <div style="padding:20px;overflow-y:auto;flex:1">
-        <h2 style="margin-bottom:16px;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">APIキー</h2>
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px">
+    <!-- ──────── 設定 ──────── -->
+    <div class="step-content" id="view5">
+      <div class="settings-body">
+        <h2 style="margin-bottom:12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">APIキー</h2>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:20px">
           <div style="margin-bottom:12px">
             <label>使用するAIモデル</label>
-            <select id="cfg-provider" style="width:220px">
+            <select id="cfg-provider" style="width:200px">
               <option value="anthropic">Claude（Anthropic）</option>
               <option value="openai">GPT-4o（OpenAI）</option>
             </select>
           </div>
-          <div class="config-grid" style="margin-bottom:12px">
+          <div class="config-grid" style="margin-bottom:10px">
             <div>
               <label>Anthropic APIキー</label>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input type="password" id="cfg-anthropic-key" placeholder="sk-ant-api03-...">
-                <span id="anthropic-status" style="font-size:.75rem;white-space:nowrap;color:var(--muted)"></span>
-              </div>
+              <input type="password" id="cfg-anthropic-key" placeholder="sk-ant-api03-...">
+              <div id="anthropic-status" style="font-size:.72rem;margin-top:3px;color:var(--muted)"></div>
             </div>
             <div>
               <label>OpenAI APIキー</label>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input type="password" id="cfg-openai-key" placeholder="sk-proj-...">
-                <span id="openai-status" style="font-size:.75rem;white-space:nowrap;color:var(--muted)"></span>
-              </div>
+              <input type="password" id="cfg-openai-key" placeholder="sk-proj-...">
+              <div id="openai-status" style="font-size:.72rem;margin-top:3px;color:var(--muted)"></div>
             </div>
           </div>
-          <div style="font-size:.75rem;color:var(--muted);margin-bottom:10px">
-            ※ サーバーローカルの .keys.json に保存されます。空欄で保存しても上書きされません。
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">
+            サーバーローカルの .keys.json に保存。空欄で保存しても上書きされません。
           </div>
-          <div style="display:flex;gap:10px;align-items:center">
-            <button class="btn btn-primary" style="width:auto" onclick="saveKeys()">APIキーを保存</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="saveKeys()">APIキーを保存</button>
             <span class="save-msg" id="key-save-msg"></span>
           </div>
         </div>
 
-        <h2 style="margin-bottom:16px;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">送信者情報</h2>
+        <h2 style="margin-bottom:12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">送信者情報</h2>
         <div class="config-grid">
           <div><label>会社名</label><input type="text" id="cfg-company"></div>
           <div><label>部署名</label><input type="text" id="cfg-dept"></div>
@@ -280,28 +354,29 @@
           <div><label>自社URL</label><input type="text" id="cfg-url"></div>
         </div>
 
-        <h2 style="margin:20px 0 16px;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">サービス情報</h2>
+        <h2 style="margin:18px 0 12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">サービス情報</h2>
         <div>
           <label>サービス名</label>
-          <input type="text" id="cfg-svc-name" style="margin-bottom:10px">
+          <input type="text" id="cfg-svc-name" style="margin-bottom:8px">
           <label>サービス概要（AIがメッセージ生成に使用）</label>
           <textarea id="cfg-svc-summary" rows="5"></textarea>
         </div>
 
-        <h2 style="margin:20px 0 10px;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">送信間隔（秒）</h2>
-        <input type="number" id="cfg-wait" style="width:100px" min="3">
+        <h2 style="margin:18px 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">送信間隔（秒）</h2>
+        <input type="number" id="cfg-wait" style="width:90px" min="3">
 
         <div class="save-row">
-          <button class="btn btn-primary" style="width:auto" onclick="saveConfig()">設定を保存</button>
+          <button class="btn btn-primary btn-sm" onclick="saveConfig()">設定を保存</button>
           <span class="save-msg" id="save-msg"></span>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- ── 編集モーダル ── -->
-<div class="modal-overlay" id="modal">
+  </div><!-- .main -->
+</div><!-- .layout -->
+
+<!-- 編集モーダル -->
+<div class="overlay" id="modal">
   <div class="modal">
     <h3 id="modal-company"></h3>
     <div>
@@ -313,79 +388,93 @@
       <textarea id="modal-body"></textarea>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
-      <button class="btn btn-green" onclick="saveModal()">保存</button>
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-green btn-sm" onclick="saveModal()">保存</button>
     </div>
   </div>
 </div>
 
 <script>
-// ── タブ ─────────────────────────────────────────────────────
-function switchTab(name, el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
+// ─────────────────────────────────────────────────────────────
+// ステップ管理
+// ─────────────────────────────────────────────────────────────
+let currentStep = 1;
+const STEP_COUNT = 4;
+
+function showStep(n) {
+  currentStep = n;
+  document.querySelectorAll('.step').forEach((el, i) => {
+    el.classList.remove('active');
+    if (i + 1 < n)      el.classList.add('done');
+    else if (i + 1 === n) el.classList.add('active');
+    else                 el.classList.remove('done');
+  });
+  // view5 は設定タブ
+  document.querySelectorAll('.step-content').forEach((el, i) => {
+    el.classList.toggle('active', i + 1 === n);
+  });
 }
 
-// ── ファイル選択 ──────────────────────────────────────────────
-const csvFileInput = document.getElementById('csv_file');
-const dropzone = document.getElementById('dropzone');
+// ─────────────────────────────────────────────────────────────
+// ファイル選択
+// ─────────────────────────────────────────────────────────────
 let csvFileData = null;
-csvFileInput.addEventListener('change', e => {
+document.getElementById('csv_file').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
   csvFileData = f;
   document.getElementById('filename').textContent = '✓ ' + f.name;
   document.getElementById('csv_text').value = '';
 });
-dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-dropzone.addEventListener('drop', e => {
-  e.preventDefault(); dropzone.classList.remove('drag');
+const dz = document.getElementById('dropzone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
   const f = e.dataTransfer.files[0]; if (!f) return;
-  csvFileData = f;
-  document.getElementById('filename').textContent = '✓ ' + f.name;
+  csvFileData = f; document.getElementById('filename').textContent = '✓ ' + f.name;
   document.getElementById('csv_text').value = '';
 });
 
-// ── ステータス ────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// ステータスバッジ
+// ─────────────────────────────────────────────────────────────
 const statusLabel = { idle:'待機中', running:'実行中', finished:'完了', error:'エラー' };
 function setStatus(s) {
   const el = document.getElementById('status-badge');
   el.className = s;
-  el.innerHTML = s === 'running' ? `<span class="spinner"></span> ${statusLabel[s]}` : (statusLabel[s] || s);
+  el.innerHTML = s === 'running'
+    ? `<span class="spinner"></span> ${statusLabel[s]}`
+    : (statusLabel[s] || s);
 }
 
-// ── ログ ──────────────────────────────────────────────────────
-const logEl = document.getElementById('log');
-let cntSent = 0, cntSkip = 0, cntErr = 0;
-function appendLog(msg) {
-  const d = document.createElement('div');
-  d.textContent = msg;
-  if (msg.includes('スキップ'))  d.className = 'log-skip';
-  else if (msg.includes('[DONE]') || msg.includes('送信完了') || msg.includes('✓')) d.className = 'log-ok';
-  else if (msg.includes('エラー') || msg.includes('[ERROR]')) d.className = 'log-error';
-  logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
-  if (msg.includes('→ 送信済み')) { cntSent++; document.getElementById('cnt-sent').textContent = cntSent; }
-  if (msg.includes('→ スキップ')) { cntSkip++; document.getElementById('cnt-skip').textContent = cntSkip; }
-  if (msg.includes('→ エラー'))   { cntErr++;  document.getElementById('cnt-err').textContent = cntErr; }
-}
-
-// ── SSE ──────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// SSE
+// ─────────────────────────────────────────────────────────────
 let evtSource = null;
-function startSSE(onEnd) {
+function startSSE(onSpecial) {
   if (evtSource) evtSource.close();
   evtSource = new EventSource('/api/stream');
   evtSource.onmessage = e => {
     const msg = e.data;
-    if (msg === '[STREAM_END]') { evtSource.close(); evtSource = null; if (onEnd) onEnd(); return; }
-    if (msg.startsWith('[PREVIEW_DONE]')) {
-      evtSource.close(); evtSource = null;
-      loadPreviewData(); if (onEnd) onEnd(); return;
-    }
+    if (msg === '[STREAM_END]') { evtSource.close(); evtSource = null; return; }
+    if (onSpecial && onSpecial(msg)) return;
     appendLog(msg);
   };
   evtSource.onerror = () => { evtSource.close(); evtSource = null; };
+}
+
+const logEl = document.getElementById('log');
+let cntSent=0, cntSkip=0, cntErr=0;
+function appendLog(msg) {
+  const d = document.createElement('div');
+  d.textContent = msg;
+  if (msg.includes('✓') || msg.includes('[DONE]') || msg.includes('送信済み')) d.className='log-ok';
+  else if (msg.includes('⚠') || msg.includes('スキップ')) d.className='log-warn';
+  else if (msg.includes('エラー') || msg.includes('[ERROR]')) d.className='log-err';
+  logEl.appendChild(d); logEl.scrollTop = logEl.scrollHeight;
+  if (msg.includes('→ 送信済み')) { cntSent++; document.getElementById('cnt-sent').textContent=cntSent; }
+  if (msg.includes('→ スキップ')) { cntSkip++; document.getElementById('cnt-skip').textContent=cntSkip; }
+  if (msg.includes('→ エラー'))   { cntErr++;  document.getElementById('cnt-err').textContent=cntErr; }
 }
 
 function pollStatus(onDone) {
@@ -401,110 +490,213 @@ function pollStatus(onDone) {
   }, 2000);
 }
 
-// ── STEP1: プレビュー生成 ────────────────────────────────────
-async function startPreview() {
+// ─────────────────────────────────────────────────────────────
+// STEP1: CSV読み込み
+// ─────────────────────────────────────────────────────────────
+let companies = [];
+
+async function loadCompanies() {
   const csvText = document.getElementById('csv_text').value.trim();
   if (!csvFileData && !csvText) { alert('CSVを選択または貼り付けてください'); return; }
-
-  logEl.innerHTML = '';
-  document.getElementById('preview-body').innerHTML =
-    '<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--muted)"><span class="spinner" style="width:16px;height:16px;border-width:3px"></span> メッセージ生成中...</td></tr>';
 
   const fd = new FormData();
   if (csvFileData) fd.append('csv_file', csvFileData);
   else             fd.append('csv_text', csvText);
-  fd.append('limit', document.getElementById('limit').value);
+
+  const res  = await fetch('/api/companies', { method:'POST', body:fd });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'エラー'); return; }
+
+  companies = data.companies;
+  renderStep1();
+  document.getElementById('btn-check').disabled = false;
+  showStep(1);
+}
+
+function renderStep1() {
+  const tbody = document.getElementById('body1');
+  if (!companies.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">データがありません</td></tr>'; return;
+  }
+  tbody.innerHTML = companies.map(c => `
+    <tr>
+      <td class="center"><input type="checkbox" checked class="cb1" data-idx="${c.idx}"></td>
+      <td class="company">${esc(c['会社名']||'')}</td>
+      <td class="url"><a href="${esc(c['フォームURL']||'')}" target="_blank">${esc(c['フォームURL']||'（なし）')}</a></td>
+      <td>${esc(c['業種']||'')}</td>
+      <td style="font-size:.75rem;color:var(--muted)">${esc(c['メモ']||'')}</td>
+    </tr>`).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+// STEP2: 警告チェック
+// ─────────────────────────────────────────────────────────────
+let checkResults = [];
+
+async function startCheck() {
+  if (!companies.length) { alert('先にCSVを読み込んでください'); return; }
+
+  showStep(2); // ビューを切り替え
+  document.getElementById('body2').innerHTML =
+    '<tr><td colspan="6" class="empty"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span> チェック中...</td></tr>';
+  document.getElementById('check-stats').style.display='none';
 
   setStatus('running');
-  document.getElementById('btn-preview').disabled = true;
-  document.getElementById('btn-send').disabled = true;
+  document.getElementById('btn-check').disabled = true;
 
-  // ログタブに切り替え
-  document.querySelectorAll('.tab')[1].click();
-
-  const res = await fetch('/api/preview', { method: 'POST', body: fd });
+  const res  = await fetch('/api/check', { method:'POST' });
   const data = await res.json();
-  if (!res.ok) { alert(data.error || 'エラー'); setStatus('idle'); document.getElementById('btn-preview').disabled = false; return; }
+  if (!res.ok) { alert(data.error || 'エラー'); setStatus('idle'); document.getElementById('btn-check').disabled=false; return; }
 
-  appendLog(`メッセージ生成開始 — 合計${data.total}社`);
-  startSSE(() => {
-    document.getElementById('btn-preview').disabled = false;
-    // プレビュータブに切り替え
-    document.querySelectorAll('.tab')[0].click();
+  startSSE(msg => {
+    if (msg.startsWith('[CHECK_DONE]')) {
+      evtSource.close(); evtSource=null;
+      loadCheckData();
+      return true;
+    }
+    return false;
   });
-  pollStatus(d => {
-    document.getElementById('btn-preview').disabled = false;
+  pollStatus(() => {
+    document.getElementById('btn-check').disabled = false;
+    loadCheckData();
   });
 }
 
-// ── プレビューデータ読み込み・表示 ───────────────────────────
+async function loadCheckData() {
+  const r = await fetch('/api/check/data');
+  const d = await r.json();
+  checkResults = d.items || [];
+  renderStep2();
+}
+
+function renderStep2() {
+  const tbody = document.getElementById('body2');
+  if (!checkResults.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">データがありません</td></tr>'; return;
+  }
+
+  let ok=0, warn=0, err=0;
+  tbody.innerHTML = checkResults.map(r => {
+    const s = r.status;
+    if (s==='ok')      ok++;
+    else if (s==='warning') warn++;
+    else if (s==='error')   err++;
+
+    const tagClass = {ok:'tag-ok', warning:'tag-warning', error:'tag-error', no_url:'tag-nurl'}[s] || 'tag-nurl';
+    const tagLabel = {ok:'✓ 問題なし', warning:'⚠ 警告あり', error:'エラー', no_url:'URLなし'}[s] || s;
+    // 警告やエラーはデフォルトでチェックOFF
+    const checked  = (s === 'ok') ? 'checked' : '';
+
+    return `<tr>
+      <td class="center"><input type="checkbox" ${checked} class="cb2" data-idx="${r.idx}"></td>
+      <td class="company">${esc(r['会社名']||'')}</td>
+      <td class="url"><a href="${esc(r['フォームURL']||'')}" target="_blank">${esc(r['フォームURL']||'（なし）')}</a></td>
+      <td style="font-size:.75rem;color:var(--muted)">${esc(r.page_title||'')}</td>
+      <td><span class="tag ${tagClass}">${tagLabel}</span></td>
+      <td style="font-size:.75rem;color:var(--yellow)">${esc(r.warning_keyword||'')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('cnt-ok').textContent   = ok;
+  document.getElementById('cnt-warn').textContent  = warn;
+  document.getElementById('cnt-err2').textContent  = err;
+  document.getElementById('check-stats').style.display = 'flex';
+  document.getElementById('btn-generate').disabled = (ok === 0 && warn === 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+// STEP3: メッセージ生成
+// ─────────────────────────────────────────────────────────────
 let previewItems = [];
+
+async function startGenerate() {
+  // チェックONの idx を収集
+  const included_idxs = [...document.querySelectorAll('.cb2:checked')].map(cb => parseInt(cb.dataset.idx));
+  if (!included_idxs.length) { alert('送信対象の企業を選択してください'); return; }
+
+  showStep(3);
+  document.getElementById('body3').innerHTML =
+    '<tr><td colspan="4" class="empty"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span> メッセージ生成中...</td></tr>';
+  document.getElementById('preview-sel-info').textContent = '';
+
+  setStatus('running');
+  document.getElementById('btn-generate').disabled = true;
+
+  const res  = await fetch('/api/preview', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ included_idxs }),
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'エラー'); setStatus('idle'); document.getElementById('btn-generate').disabled=false; return; }
+
+  startSSE(msg => {
+    if (msg.startsWith('[PREVIEW_DONE]')) {
+      evtSource.close(); evtSource=null;
+      loadPreviewData();
+      return true;
+    }
+    return false;
+  });
+  pollStatus(() => {
+    document.getElementById('btn-generate').disabled = false;
+    loadPreviewData();
+  });
+}
 
 async function loadPreviewData() {
   const r = await fetch('/api/preview/data');
   const d = await r.json();
   previewItems = d.items || [];
-  renderPreviewTable();
-  updateSelInfo();
-  if (previewItems.some(it => !it['スキップ'])) {
-    document.getElementById('btn-send').disabled = false;
-  }
+  renderStep3();
   setStatus(d.status);
 }
 
-function renderPreviewTable() {
-  const tbody = document.getElementById('preview-body');
+function renderStep3() {
+  const tbody = document.getElementById('body3');
   if (!previewItems.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="padding:40px;text-align:center;color:var(--muted)">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = previewItems.map((item, i) => {
-    const skip = item['スキップ'];
-    const subject = escHtml(item['件名'] || '');
-    const body    = escHtml(item['本文'] || '');
-    const preview = body.length > 80 ? body.slice(0, 80) + '…' : body;
-    return `<tr class="${skip ? 'skipped' : ''}" data-idx="${i}">
-      <td style="text-align:center">
-        ${skip ? '' : `<input type="checkbox" checked onchange="updateSelInfo()" class="row-cb">`}
-      </td>
-      <td class="company">${escHtml(item['会社名'] || '')}<br>
-        <a href="${escHtml(item['フォームURL']||'')}" target="_blank" style="font-size:.72rem;color:var(--accent2)">フォームを開く</a>
-      </td>
-      <td class="appeal">${escHtml(item['訴求'] || '')}</td>
-      <td class="msg" onclick="${skip ? '' : `openModal(${i})`}" style="${skip ? '' : 'cursor:pointer'}">
-        ${skip
-          ? `<span class="tag tag-skip">${escHtml(item['スキップ理由']||'スキップ')}</span>`
-          : `<div class="subject">${subject || '（件名なし）'}</div>
-             <div class="body-preview">${preview || '（本文なし）'}</div>`
-        }
-      </td>
-      <td class="actions">
-        ${skip ? '<span class="tag tag-skip">スキップ</span>'
-               : `<button class="btn btn-outline btn-sm" onclick="openModal(${i})">編集</button>`}
+    if (item['スキップ']) {
+      return `<tr style="opacity:.5">
+        <td class="center"><input type="checkbox" disabled></td>
+        <td class="company">${esc(item['会社名']||'')}</td>
+        <td><span class="tag tag-skip">${esc(item['スキップ理由']||'スキップ')}</span></td>
+        <td></td>
+      </tr>`;
+    }
+    return `<tr data-pidx="${i}">
+      <td class="center"><input type="checkbox" checked class="cb3" data-pidx="${i}" onchange="updatePreviewSel()"></td>
+      <td class="company">${esc(item['会社名']||'')}</td>
+      <td><span class="tag" style="background:#1e1b4b;color:var(--accent2);font-size:.72rem">${esc(item['訴求']||'')}</span></td>
+      <td onclick="openModal(${i})" style="cursor:pointer">
+        <div class="msg-subject">${esc(item['件名']||'（件名なし）')}</div>
+        <div class="msg-body">${esc(item['本文']||'（本文なし）')}</div>
       </td>
     </tr>`;
   }).join('');
+  updatePreviewSel();
 }
 
-function updateSelInfo() {
-  const checked = document.querySelectorAll('.row-cb:checked').length;
-  document.getElementById('sel-info').textContent = `${checked}件選択中`;
-  document.getElementById('btn-send').disabled = checked === 0;
+function previewSelectAll(v) {
+  document.querySelectorAll('.cb3').forEach(cb => cb.checked = v);
+  updatePreviewSel();
 }
 
-function selectAll(v) {
-  document.querySelectorAll('.row-cb').forEach(cb => cb.checked = v);
-  updateSelInfo();
+function updatePreviewSel() {
+  const n = document.querySelectorAll('.cb3:checked').length;
+  document.getElementById('preview-sel-info').textContent = `${n}件選択中`;
+  document.getElementById('btn-send').disabled = n === 0;
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── モーダル（編集） ─────────────────────────────────────────
-let editingIdx = null;
+// ─────────────────────────────────────────────────────────────
+// モーダル（本文編集）
+// ─────────────────────────────────────────────────────────────
+let editingPidx = null;
 function openModal(i) {
-  editingIdx = i;
+  editingPidx = i;
   const item = previewItems[i];
   document.getElementById('modal-company').textContent = item['会社名'] || '';
   document.getElementById('modal-subject').value = item['件名'] || '';
@@ -513,71 +705,88 @@ function openModal(i) {
 }
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 function saveModal() {
-  if (editingIdx === null) return;
-  previewItems[editingIdx]['件名'] = document.getElementById('modal-subject').value;
-  previewItems[editingIdx]['本文'] = document.getElementById('modal-body').value;
-  renderPreviewTable();
-  updateSelInfo();
+  if (editingPidx === null) return;
+  previewItems[editingPidx]['件名'] = document.getElementById('modal-subject').value;
+  previewItems[editingPidx]['本文'] = document.getElementById('modal-body').value;
+  renderStep3();
   closeModal();
 }
-document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+document.getElementById('modal').addEventListener('click', e => { if (e.target===e.currentTarget) closeModal(); });
 
-// ── STEP2: 選択件を送信 ──────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// STEP4: 送信
+// ─────────────────────────────────────────────────────────────
 async function sendSelected() {
-  const checked = document.querySelectorAll('.row-cb:checked');
+  const checked = [...document.querySelectorAll('.cb3:checked')];
   if (!checked.length) { alert('送信する行を選択してください'); return; }
-  if (!confirm(`${checked.length}件のフォームに送信します。よろしいですか？`)) return;
 
-  // チェックされた行のデータを収集
-  const toSend = [];
-  checked.forEach(cb => {
-    const i = parseInt(cb.closest('tr').dataset.idx);
-    toSend.push(previewItems[i]);
-  });
+  const toSend = checked.map(cb => previewItems[parseInt(cb.dataset.pidx)]);
+  if (!confirm(`${toSend.length}件のフォームに送信します。よろしいですか？`)) return;
 
-  cntSent = cntSkip = cntErr = 0;
-  ['cnt-sent','cnt-skip','cnt-err'].forEach(id => document.getElementById(id).textContent = '0');
+  // ログビューに切り替え
+  showStep(4);
   logEl.innerHTML = '';
+  cntSent = cntSkip = cntErr = 0;
+  ['cnt-sent','cnt-skip','cnt-err'].forEach(id => document.getElementById(id).textContent='0');
 
   setStatus('running');
   document.getElementById('btn-send').disabled = true;
-  document.getElementById('btn-preview').disabled = true;
-  document.querySelectorAll('.tab')[1].click();
 
   const res = await fetch('/api/send_preview', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ items: toSend }),
   });
   const data = await res.json();
-  if (!res.ok) { alert(data.error || 'エラー'); setStatus('idle'); document.getElementById('btn-send').disabled = false; return; }
+  if (!res.ok) { alert(data.error||'エラー'); setStatus('idle'); document.getElementById('btn-send').disabled=false; return; }
 
   appendLog(`送信開始 — ${data.total}件`);
   startSSE(null);
   pollStatus(d => {
     document.getElementById('btn-send').disabled = false;
-    document.getElementById('btn-preview').disabled = false;
   });
 }
 
-// ── リセット ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// リセット
+// ─────────────────────────────────────────────────────────────
 async function resetAll() {
-  if (!confirm('リセットしますか？')) return;
-  await fetch('/api/reset', { method: 'POST' });
-  previewItems = [];
-  renderPreviewTable();
-  updateSelInfo();
-  logEl.textContent = '待機中です。\n';
+  if (!confirm('全データをリセットしますか？')) return;
+  await fetch('/api/reset', { method:'POST' });
+  companies=[]; checkResults=[]; previewItems=[];
+  renderStep1(); renderStep2stub(); renderStep3stub();
+  logEl.textContent='送信ログがここに表示されます。\n';
+  cntSent=cntSkip=cntErr=0;
+  ['cnt-sent','cnt-skip','cnt-err'].forEach(id=>document.getElementById(id).textContent='0');
   setStatus('idle');
-  document.getElementById('btn-dl').disabled = true;
-  document.getElementById('btn-send').disabled = true;
-  cntSent = cntSkip = cntErr = 0;
-  ['cnt-sent','cnt-skip','cnt-err'].forEach(id => document.getElementById(id).textContent = '0');
+  document.getElementById('btn-check').disabled=true;
+  document.getElementById('btn-generate').disabled=true;
+  document.getElementById('btn-send').disabled=true;
+  document.getElementById('btn-dl').disabled=true;
+  showStep(1);
 }
 
-function download() { window.location.href = '/api/download'; }
+function renderStep2stub() {
+  document.getElementById('body2').innerHTML='<tr><td colspan="6" class="empty">「フォームURLをチェックする」を押してください</td></tr>';
+  document.getElementById('check-stats').style.display='none';
+}
+function renderStep3stub() {
+  document.getElementById('body3').innerHTML='<tr><td colspan="4" class="empty">「メッセージを生成する」を押してください</td></tr>';
+  document.getElementById('preview-sel-info').textContent='';
+}
 
-// ── APIキー ───────────────────────────────────────────────────
+function download() { window.location.href='/api/download'; }
+
+// ─────────────────────────────────────────────────────────────
+// ユーティリティ
+// ─────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────────────────────────────────────────────────────────
+// APIキー
+// ─────────────────────────────────────────────────────────────
 async function loadKeys() {
   const r = await fetch('/api/keys');
   const d = await r.json();
@@ -593,32 +802,34 @@ async function saveKeys() {
     anthropic_api_key: document.getElementById('cfg-anthropic-key').value.trim(),
     openai_api_key:    document.getElementById('cfg-openai-key').value.trim(),
   };
-  if (!body.anthropic_api_key && !body.openai_api_key) { alert('少なくとも1つのAPIキーを入力してください'); return; }
+  if (!body.anthropic_api_key && !body.openai_api_key) { alert('少なくとも1つのキーを入力してください'); return; }
   const res = await fetch('/api/keys', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-  const d = await res.json();
+  const d   = await res.json();
   const msg = document.getElementById('key-save-msg');
   if (res.ok) {
-    msg.textContent = '保存しました ✓'; msg.style.color = 'var(--green)';
-    setTimeout(() => msg.textContent = '', 3000);
-    document.getElementById('cfg-anthropic-key').value = '';
-    document.getElementById('cfg-openai-key').value = '';
+    msg.textContent='保存しました ✓'; msg.style.color='var(--green)';
+    setTimeout(()=>msg.textContent='',3000);
+    document.getElementById('cfg-anthropic-key').value='';
+    document.getElementById('cfg-openai-key').value='';
     loadKeys();
-  } else { msg.textContent = d.error || 'エラー'; msg.style.color = 'var(--red)'; }
+  } else { msg.textContent=d.error||'エラー'; msg.style.color='var(--red)'; }
 }
 
-// ── 設定 ──────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// 設定
+// ─────────────────────────────────────────────────────────────
 async function loadConfig() {
   const r = await fetch('/api/config');
   const d = await r.json();
-  document.getElementById('cfg-provider').value    = d.settings.ai_provider  || 'anthropic';
-  document.getElementById('cfg-company').value     = d.sender.company_name   || '';
-  document.getElementById('cfg-dept').value        = d.sender.department     || '';
-  document.getElementById('cfg-name').value        = d.sender.name           || '';
-  document.getElementById('cfg-email').value       = d.sender.email          || '';
-  document.getElementById('cfg-phone').value       = d.sender.phone          || '';
-  document.getElementById('cfg-url').value         = d.sender.url            || '';
-  document.getElementById('cfg-svc-name').value    = d.service.name          || '';
-  document.getElementById('cfg-svc-summary').value = d.service.summary       || '';
+  document.getElementById('cfg-provider').value    = d.settings.ai_provider || 'anthropic';
+  document.getElementById('cfg-company').value     = d.sender.company_name  || '';
+  document.getElementById('cfg-dept').value        = d.sender.department    || '';
+  document.getElementById('cfg-name').value        = d.sender.name          || '';
+  document.getElementById('cfg-email').value       = d.sender.email         || '';
+  document.getElementById('cfg-phone').value       = d.sender.phone         || '';
+  document.getElementById('cfg-url').value         = d.sender.url           || '';
+  document.getElementById('cfg-svc-name').value    = d.service.name         || '';
+  document.getElementById('cfg-svc-summary').value = d.service.summary      || '';
   document.getElementById('cfg-wait').value        = d.settings.wait_between_seconds || 10;
 }
 async function saveConfig() {
@@ -642,8 +853,8 @@ async function saveConfig() {
   };
   const res = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
   const msg = document.getElementById('save-msg');
-  if (res.ok) { msg.textContent = '保存しました ✓'; msg.style.color = 'var(--green)'; setTimeout(() => msg.textContent = '', 3000); }
-  else        { msg.textContent = 'エラー'; msg.style.color = 'var(--red)'; }
+  if (res.ok) { msg.textContent='保存しました ✓'; msg.style.color='var(--green)'; setTimeout(()=>msg.textContent='',3000); }
+  else        { msg.textContent='エラー'; msg.style.color='var(--red)'; }
 }
 
 // 初期化
