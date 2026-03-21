@@ -28,6 +28,7 @@ from flask import (Flask, render_template, request, jsonify,
 from form_bot import (load_config, load_input_csv, run_bot,
                       check_form_warnings, generate_preview, send_preview,
                       BASE_DIR, CONFIG_FILE)
+import rag as rag_mod
 
 # ── APIキー永続化ファイル（gitignore対象）───────────────────
 KEYS_FILE = BASE_DIR / ".keys.json"
@@ -74,7 +75,7 @@ def _parse_csv_text(csv_text: str) -> list[dict]:
 # ── アプリ初期化 ─────────────────────────────────────────────
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
-app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10MB
+app.config["MAX_CONTENT_LENGTH"] = 30 * 1024 * 1024  # 30MB（PDF対応）
 
 # ── Basic認証 ────────────────────────────────────────────────
 AUTH_USER = os.environ.get("BASIC_AUTH_USER", "admin")
@@ -464,6 +465,79 @@ def post_keys():
         "anthropic": mask_key(os.environ.get("ANTHROPIC_API_KEY", "")),
         "openai":    mask_key(os.environ.get("OPENAI_API_KEY", "")),
     })
+
+
+# ══════════════════════════════════════════════════════════════
+# RAG ナレッジベース API
+# ══════════════════════════════════════════════════════════════
+
+@app.route("/api/rag", methods=["GET"])
+@requires_auth
+def rag_list():
+    """保存済みエントリ一覧（contentはプレビューのみ）"""
+    return jsonify({"entries": rag_mod.list_entries()})
+
+
+@app.route("/api/rag/text", methods=["POST"])
+@requires_auth
+def rag_add_text():
+    """テキスト / プロンプトを追加"""
+    data = request.get_json(silent=True) or {}
+    title   = (data.get("title") or "テキストメモ").strip()
+    content = (data.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "contentが空です"}), 400
+    entry = rag_mod.add_entry(title, content, source_type="text")
+    return jsonify({"ok": True, "entry": entry})
+
+
+@app.route("/api/rag/url", methods=["POST"])
+@requires_auth
+def rag_add_url():
+    """URLのテキストを取得して追加"""
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "URLが指定されていません"}), 400
+    try:
+        title, content = rag_mod.fetch_url_content(url)
+    except Exception as e:
+        return jsonify({"error": f"URLの取得に失敗しました: {e}"}), 400
+    if not content.strip():
+        return jsonify({"error": "ページからテキストを取得できませんでした"}), 400
+    entry = rag_mod.add_entry(title, content, source_type="url", source=url)
+    return jsonify({"ok": True, "entry": entry})
+
+
+@app.route("/api/rag/file", methods=["POST"])
+@requires_auth
+def rag_add_file():
+    """ファイル（PDF / txt / csv / md）をアップロードして追加"""
+    if "file" not in request.files:
+        return jsonify({"error": "fileフィールドがありません"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+    content_bytes = f.read()
+    try:
+        content = rag_mod.parse_file_content(f.filename, content_bytes)
+    except Exception as e:
+        return jsonify({"error": f"ファイルの解析に失敗しました: {e}"}), 400
+    if not content.strip():
+        return jsonify({"error": "ファイルからテキストを取得できませんでした"}), 400
+    title = Path(f.filename).stem
+    entry = rag_mod.add_entry(title, content, source_type="file", source=f.filename)
+    return jsonify({"ok": True, "entry": entry})
+
+
+@app.route("/api/rag/<entry_id>", methods=["DELETE"])
+@requires_auth
+def rag_delete(entry_id):
+    """エントリを削除"""
+    deleted = rag_mod.delete_entry(entry_id)
+    if not deleted:
+        return jsonify({"error": "エントリが見つかりません"}), 404
+    return jsonify({"ok": True})
 
 
 @app.route("/api/reset", methods=["POST"])

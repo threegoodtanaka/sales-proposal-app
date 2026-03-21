@@ -64,11 +64,12 @@ def detect_warning(page_text: str, keywords: list[str]) -> str | None:
 # ══════════════════════════════════════════════════════════════
 # メッセージ生成プロンプト（Anthropic / OpenAI 共通）
 # ══════════════════════════════════════════════════════════════
-def _build_prompt(company, appeal, sender, service, form_fields) -> str:
+def _build_prompt(company, appeal, sender, service, form_fields, rag_context: str = "") -> str:
     fields_desc = "、".join(form_fields) if form_fields else "不明"
+    rag_section = f"\n{rag_context}\n" if rag_context else ""
     return f"""あなたはBtoB営業のプロです。
 以下の情報をもとに、問い合わせフォームに送る営業メッセージを生成してください。
-
+{rag_section}
 【自社情報】
 会社名: {sender['company_name']}
 サービス名: {service['name']}
@@ -124,7 +125,12 @@ def generate_message(
     Claude または GPT を使って営業メッセージを生成する。
     Returns: {"subject": ..., "body": ...}
     """
-    prompt = _build_prompt(company, appeal, sender, service, form_fields)
+    try:
+        from rag import get_rag_context
+        rag_ctx = get_rag_context()
+    except Exception:
+        rag_ctx = ""
+    prompt = _build_prompt(company, appeal, sender, service, form_fields, rag_context=rag_ctx)
 
     if provider == "openai":
         response = client.chat.completions.create(

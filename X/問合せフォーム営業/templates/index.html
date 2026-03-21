@@ -131,6 +131,25 @@ td.center{text-align:center}
 .save-row{margin-top:14px;display:flex;gap:10px;align-items:center}
 .save-msg{font-size:.78rem}
 
+/* ── RAG ── */
+.rag-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px}
+.rag-tab{padding:6px 14px;font-size:.8rem;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
+.rag-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.rag-input-panel{display:none}
+.rag-input-panel.active{display:block}
+.rag-entry{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+  display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.rag-entry-icon{font-size:1.1rem;flex-shrink:0;margin-top:2px}
+.rag-entry-info{flex:1;min-width:0}
+.rag-entry-title{font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rag-entry-meta{font-size:.72rem;color:var(--muted);margin-top:2px}
+.rag-entry-preview{font-size:.72rem;color:var(--muted);margin-top:4px;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rag-del{flex-shrink:0;background:none;border:none;color:var(--red);cursor:pointer;padding:2px 6px;
+  font-size:.8rem;opacity:.6;transition:opacity .15s}
+.rag-del:hover{opacity:1}
+.rag-empty{padding:30px 0;text-align:center;color:var(--muted);font-size:.82rem}
+
 .spinner{width:10px;height:10px;border:2px solid transparent;
   border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -368,6 +387,73 @@ td.center{text-align:center}
         <div class="save-row">
           <button class="btn btn-primary btn-sm" onclick="saveConfig()">設定を保存</button>
           <span class="save-msg" id="save-msg"></span>
+        </div>
+
+        <!-- ══ RAG ナレッジベース ══ -->
+        <h2 style="margin:28px 0 12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">
+          ナレッジベース（RAG）
+        </h2>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:20px">
+          <div style="font-size:.78rem;color:var(--muted);margin-bottom:12px">
+            プロンプト・PDF・URL・テキストを登録すると、AIがメッセージを生成する際に自動で参照します。
+          </div>
+
+          <!-- 入力タブ -->
+          <div class="rag-tabs">
+            <div class="rag-tab active" onclick="ragTab('text')">📝 テキスト</div>
+            <div class="rag-tab" onclick="ragTab('url')">🔗 URL</div>
+            <div class="rag-tab" onclick="ragTab('file')">📎 ファイル</div>
+          </div>
+
+          <!-- テキスト入力 -->
+          <div class="rag-input-panel active" id="rag-panel-text">
+            <label>タイトル（任意）</label>
+            <input type="text" id="rag-text-title" placeholder="例: 会社概要" style="margin-bottom:8px">
+            <label>内容</label>
+            <textarea id="rag-text-content" rows="5" placeholder="プロンプト・メモ・会社紹介文など自由に入力"></textarea>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary btn-sm" onclick="ragAddText()">追加</button>
+              <span class="save-msg" id="rag-text-msg"></span>
+            </div>
+          </div>
+
+          <!-- URL入力 -->
+          <div class="rag-input-panel" id="rag-panel-url">
+            <label>URL</label>
+            <input type="text" id="rag-url-input" placeholder="https://example.com/about" style="margin-bottom:8px">
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary btn-sm" onclick="ragAddUrl()">
+                <span id="rag-url-spinner" class="spinner" style="display:none;width:10px;height:10px;border-width:2px"></span>
+                取得して追加
+              </button>
+              <span class="save-msg" id="rag-url-msg"></span>
+            </div>
+          </div>
+
+          <!-- ファイル入力 -->
+          <div class="rag-input-panel" id="rag-panel-file">
+            <div class="dropzone" id="rag-dropzone" onclick="document.getElementById('rag-file-input').click()" style="margin-bottom:8px">
+              <div class="icon">📎</div>
+              <p>PDF / TXT / CSV / MD をドラッグ＆ドロップ、またはクリック</p>
+              <div class="filename" id="rag-filename"></div>
+            </div>
+            <input type="file" id="rag-file-input" accept=".pdf,.txt,.csv,.md,.markdown" style="display:none">
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary btn-sm" onclick="ragAddFile()">
+                <span id="rag-file-spinner" class="spinner" style="display:none;width:10px;height:10px;border-width:2px"></span>
+                アップロードして追加
+              </button>
+              <span class="save-msg" id="rag-file-msg"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 保存済みエントリ一覧 -->
+        <h2 style="margin-bottom:10px;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">
+          登録済みナレッジ
+        </h2>
+        <div id="rag-list">
+          <div class="rag-empty">読み込み中...</div>
         </div>
       </div>
     </div>
@@ -857,9 +943,138 @@ async function saveConfig() {
   else        { msg.textContent='エラー'; msg.style.color='var(--red)'; }
 }
 
+// ─────────────────────────────────────────────────────────────
+// RAG ナレッジベース
+// ─────────────────────────────────────────────────────────────
+const sourceIcon = { text:'📝', url:'🔗', file:'📎' };
+
+function ragTab(type) {
+  document.querySelectorAll('.rag-tab').forEach((el, i) => {
+    const types = ['text', 'url', 'file'];
+    el.classList.toggle('active', types[i] === type);
+  });
+  document.querySelectorAll('.rag-input-panel').forEach(el => {
+    el.classList.toggle('active', el.id === `rag-panel-${type}`);
+  });
+}
+
+async function loadRag() {
+  const r = await fetch('/api/rag');
+  const d = await r.json();
+  renderRag(d.entries || []);
+}
+
+function renderRag(entries) {
+  const el = document.getElementById('rag-list');
+  if (!entries.length) {
+    el.innerHTML = '<div class="rag-empty">まだ登録がありません</div>';
+    return;
+  }
+  el.innerHTML = entries.map(e => `
+    <div class="rag-entry">
+      <div class="rag-entry-icon">${sourceIcon[e.source_type] || '📄'}</div>
+      <div class="rag-entry-info">
+        <div class="rag-entry-title">${esc(e.title)}</div>
+        <div class="rag-entry-meta">${e.chars.toLocaleString()}文字 · ${e.created_at}${e.source ? ' · ' + esc(e.source.slice(0, 60)) : ''}</div>
+        <div class="rag-entry-preview">${esc(e.preview)}</div>
+      </div>
+      <button class="rag-del" onclick="ragDelete('${e.id}')" title="削除">✕</button>
+    </div>`).join('');
+}
+
+async function ragAddText() {
+  const title   = document.getElementById('rag-text-title').value.trim() || 'テキストメモ';
+  const content = document.getElementById('rag-text-content').value.trim();
+  const msg     = document.getElementById('rag-text-msg');
+  if (!content) { msg.textContent='内容を入力してください'; msg.style.color='var(--red)'; return; }
+
+  const res = await fetch('/api/rag/text', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ title, content }),
+  });
+  const d = await res.json();
+  if (res.ok) {
+    msg.textContent='追加しました ✓'; msg.style.color='var(--green)';
+    document.getElementById('rag-text-title').value='';
+    document.getElementById('rag-text-content').value='';
+    setTimeout(()=>msg.textContent='',3000);
+    loadRag();
+  } else { msg.textContent=d.error||'エラー'; msg.style.color='var(--red)'; }
+}
+
+async function ragAddUrl() {
+  const url  = document.getElementById('rag-url-input').value.trim();
+  const msg  = document.getElementById('rag-url-msg');
+  const spin = document.getElementById('rag-url-spinner');
+  if (!url) { msg.textContent='URLを入力してください'; msg.style.color='var(--red)'; return; }
+
+  spin.style.display='inline-block'; msg.textContent='取得中...'; msg.style.color='var(--muted)';
+  const res = await fetch('/api/rag/url', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ url }),
+  });
+  spin.style.display='none';
+  const d = await res.json();
+  if (res.ok) {
+    msg.textContent='追加しました ✓'; msg.style.color='var(--green)';
+    document.getElementById('rag-url-input').value='';
+    setTimeout(()=>msg.textContent='',3000);
+    loadRag();
+  } else { msg.textContent=d.error||'エラー'; msg.style.color='var(--red)'; }
+}
+
+let ragFile = null;
+document.addEventListener('DOMContentLoaded', () => {
+  const fi = document.getElementById('rag-file-input');
+  if (fi) fi.addEventListener('change', e => {
+    ragFile = e.target.files[0];
+    if (ragFile) document.getElementById('rag-filename').textContent = '✓ ' + ragFile.name;
+  });
+  const rdz = document.getElementById('rag-dropzone');
+  if (rdz) {
+    rdz.addEventListener('dragover', e => { e.preventDefault(); rdz.classList.add('drag'); });
+    rdz.addEventListener('dragleave', () => rdz.classList.remove('drag'));
+    rdz.addEventListener('drop', e => {
+      e.preventDefault(); rdz.classList.remove('drag');
+      ragFile = e.dataTransfer.files[0];
+      if (ragFile) document.getElementById('rag-filename').textContent = '✓ ' + ragFile.name;
+    });
+  }
+});
+
+async function ragAddFile() {
+  const msg  = document.getElementById('rag-file-msg');
+  const spin = document.getElementById('rag-file-spinner');
+  if (!ragFile) { msg.textContent='ファイルを選択してください'; msg.style.color='var(--red)'; return; }
+
+  const fd = new FormData();
+  fd.append('file', ragFile);
+
+  spin.style.display='inline-block'; msg.textContent='解析中...'; msg.style.color='var(--muted)';
+  const res = await fetch('/api/rag/file', { method:'POST', body:fd });
+  spin.style.display='none';
+  const d = await res.json();
+  if (res.ok) {
+    msg.textContent='追加しました ✓'; msg.style.color='var(--green)';
+    ragFile=null;
+    document.getElementById('rag-filename').textContent='';
+    document.getElementById('rag-file-input').value='';
+    setTimeout(()=>msg.textContent='',3000);
+    loadRag();
+  } else { msg.textContent=d.error||'エラー'; msg.style.color='var(--red)'; }
+}
+
+async function ragDelete(id) {
+  if (!confirm('このエントリを削除しますか？')) return;
+  const res = await fetch(`/api/rag/${id}`, { method:'DELETE' });
+  if (res.ok) loadRag();
+  else alert('削除に失敗しました');
+}
+
 // 初期化
 loadConfig();
 loadKeys();
+loadRag();
 </script>
 </body>
 </html>

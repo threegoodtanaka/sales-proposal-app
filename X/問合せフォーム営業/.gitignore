@@ -1,4 +1,5 @@
 .keys.json
+rag_store.json
 results*.csv
 __pycache__/
 *.pyc
