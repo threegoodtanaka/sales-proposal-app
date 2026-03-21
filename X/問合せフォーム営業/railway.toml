@@ -4,6 +4,6 @@ buildCommand = "pip install -r requirements.txt && playwright install chromium -
 
 [deploy]
 startCommand = "python web_app.py"
-healthcheckPath = "/"
+healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
