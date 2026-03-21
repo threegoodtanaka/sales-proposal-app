@@ -76,7 +76,7 @@ skip_keywords:
 
 # ── 動作設定 ─────────────────────────────────────────────
 settings:
-  ai_provider: "anthropic"   # "anthropic"（Claude）または "openai"（GPT-4o）
+  ai_provider: "openai"      # "anthropic"（Claude）または "openai"（GPT-4o）
   dry_run: true              # true=送信しない（テストモード）/ false=実際に送信
   headless: true             # true=ブラウザ非表示 / false=ブラウザ表示（確認用）
   wait_between_seconds: 10   # 送信間隔（秒）※サーバー負荷軽減
