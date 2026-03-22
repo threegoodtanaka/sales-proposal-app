@@ -598,6 +598,7 @@ async function loadCompanies() {
   companies = data.companies;
   renderStep1();
   document.getElementById('btn-check').disabled = false;
+  document.getElementById('btn-generate').disabled = false;
   showStep(1);
 }
 
@@ -673,8 +674,8 @@ function renderStep2() {
 
     const tagClass = {ok:'tag-ok', warning:'tag-warning', error:'tag-error', no_url:'tag-nurl', captcha:'tag-captcha'}[s] || 'tag-nurl';
     const tagLabel = {ok:'✓ 問題なし', warning:'⚠ 警告あり', error:'エラー', no_url:'URLなし', captcha:'🔒 CAPTCHA（手動）'}[s] || s;
-    // 警告・エラー・CAPTCHAはデフォルトでチェックOFF
-    const checked  = (s === 'ok') ? 'checked' : '';
+    // チェック結果に関わらず全社デフォルトON（URLなし・エラーのみOFF）
+    const checked  = (s === 'no_url') ? '' : 'checked';
 
     return `<tr>
       <td class="center"><input type="checkbox" ${checked} class="cb2" data-idx="${r.idx}"></td>
@@ -691,7 +692,7 @@ function renderStep2() {
   document.getElementById('cnt-err2').textContent    = err;
   document.getElementById('cnt-captcha').textContent = captcha;
   document.getElementById('check-stats').style.display = 'flex';
-  document.getElementById('btn-generate').disabled = (ok === 0 && warn === 0);
+  document.getElementById('btn-generate').disabled = (checkResults.length === 0);
 }
 
 // ─────────────────────────────────────────────────────────────
