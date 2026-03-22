@@ -90,11 +90,12 @@ td.center{text-align:center}
 
 /* ── ステータスタグ ── */
 .tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:.72rem;font-weight:600;white-space:nowrap}
-.tag-ok     {background:#14532d;color:var(--green)}
-.tag-warning{background:#422006;color:var(--yellow)}
-.tag-error  {background:#450a0a;color:var(--red)}
-.tag-nurl   {background:#1e293b;color:var(--muted)}
-.tag-skip   {background:#1e293b;color:var(--muted)}
+.tag-ok      {background:#14532d;color:var(--green)}
+.tag-warning {background:#422006;color:var(--yellow)}
+.tag-error   {background:#450a0a;color:var(--red)}
+.tag-nurl    {background:#1e293b;color:var(--muted)}
+.tag-skip    {background:#1e293b;color:var(--muted)}
+.tag-captcha {background:#312e81;color:#a5b4fc}
 
 /* ── メッセージプレビュー ── */
 .msg-subject{font-weight:600;margin-bottom:2px;font-size:.83rem}
@@ -293,6 +294,7 @@ td.center{text-align:center}
         <div class="stat"><span class="dot dot-green"></span>OK: <b id="cnt-ok">0</b></div>
         <div class="stat"><span class="dot dot-yellow"></span>警告: <b id="cnt-warn">0</b></div>
         <div class="stat"><span class="dot dot-red"></span>エラー: <b id="cnt-err2">0</b></div>
+        <div class="stat"><span class="dot" style="background:#a5b4fc"></span>CAPTCHA(手動): <b id="cnt-captcha">0</b></div>
         <span style="margin-left:auto;font-size:.78rem;color:var(--muted)">※ チェックを外した企業はSTEP3でスキップされます</span>
       </div>
     </div>
@@ -661,16 +663,17 @@ function renderStep2() {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">データがありません</td></tr>'; return;
   }
 
-  let ok=0, warn=0, err=0;
+  let ok=0, warn=0, err=0, captcha=0;
   tbody.innerHTML = checkResults.map(r => {
     const s = r.status;
-    if (s==='ok')      ok++;
+    if (s==='ok')          ok++;
     else if (s==='warning') warn++;
     else if (s==='error')   err++;
+    else if (s==='captcha') captcha++;
 
-    const tagClass = {ok:'tag-ok', warning:'tag-warning', error:'tag-error', no_url:'tag-nurl'}[s] || 'tag-nurl';
-    const tagLabel = {ok:'✓ 問題なし', warning:'⚠ 警告あり', error:'エラー', no_url:'URLなし'}[s] || s;
-    // 警告やエラーはデフォルトでチェックOFF
+    const tagClass = {ok:'tag-ok', warning:'tag-warning', error:'tag-error', no_url:'tag-nurl', captcha:'tag-captcha'}[s] || 'tag-nurl';
+    const tagLabel = {ok:'✓ 問題なし', warning:'⚠ 警告あり', error:'エラー', no_url:'URLなし', captcha:'🔒 CAPTCHA（手動）'}[s] || s;
+    // 警告・エラー・CAPTCHAはデフォルトでチェックOFF
     const checked  = (s === 'ok') ? 'checked' : '';
 
     return `<tr>
@@ -683,9 +686,10 @@ function renderStep2() {
     </tr>`;
   }).join('');
 
-  document.getElementById('cnt-ok').textContent   = ok;
-  document.getElementById('cnt-warn').textContent  = warn;
-  document.getElementById('cnt-err2').textContent  = err;
+  document.getElementById('cnt-ok').textContent      = ok;
+  document.getElementById('cnt-warn').textContent    = warn;
+  document.getElementById('cnt-err2').textContent    = err;
+  document.getElementById('cnt-captcha').textContent = captcha;
   document.getElementById('check-stats').style.display = 'flex';
   document.getElementById('btn-generate').disabled = (ok === 0 && warn === 0);
 }

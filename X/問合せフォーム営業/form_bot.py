@@ -454,6 +454,25 @@ def check_form_warnings(companies: list[dict], cfg: dict, log_callback=None) -> 
                 context.close()
                 continue
 
+            # CAPTCHAチェック（ページソースとiframeで判定）
+            page_html = page.content().lower()
+            captcha_detected = None
+            if "recaptcha/api" in page_html or "g-recaptcha" in page_html or "data-sitekey" in page_html:
+                captcha_detected = "reCAPTCHA"
+            elif "hcaptcha.com" in page_html or "h-captcha" in page_html:
+                captcha_detected = "hCaptcha"
+            elif "challenges.cloudflare.com" in page_html or "cf-challenge" in page_html or "turnstile" in page_html:
+                captcha_detected = "Cloudflare"
+            elif "captcha" in page_html:
+                captcha_detected = "CAPTCHA"
+
+            if captcha_detected:
+                log(f"  🔒 CAPTCHA検出: {captcha_detected}（手動送信が必要）")
+                results.append({"idx": i, "会社名": company_name, "フォームURL": form_url,
+                                 "status": "captcha", "warning_keyword": captcha_detected, "page_title": page_title})
+                context.close()
+                continue
+
             matched_kw = detect_warning(page_text, skip_kws)
             if matched_kw:
                 log(f"  ⚠ 警告検出: 「{matched_kw}」")
